@@ -10,7 +10,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import nibabel as nb
-import nitools as niu
+# import nitools as niu
 import os
 
 base_dir = os.path.join('C:\\Users\\lshah\\OneDrive\\Documents\\Data\\FunctionalFusion\\WMFS')
@@ -33,7 +33,7 @@ class Data():
         self.ses = ses
         self.atlas = atlas
         self.type = integ_type
-    def get_data(self):
+    def load_data(self):
         """
         extract data for the region of interest
         """                                   
@@ -43,17 +43,19 @@ class Data():
         data_cifti = nb.load(data_file)
         self.data = data_cifti.get_fdata()
         print(self.data.shape)
-        bmf = data_cifti.header.get_axis(1)
-        data_list = []
-        for idx, (nam,slc,bm) in enumerate(bmf.iter_structures()):
-            print(idx,str(nam),slc)
-    def get_average():
+    def get_data(self):
+        """
+        method to extract data using functional fusion 
+        package if it hasn't been done
+
+        UNDER CONSTRUCTION
+        """
+    def get_average(self):
         """
         average data across the region of interest
         uses self.info
         """
-
-        pass
+        self.atlas_data = np.nanmean(self.data, axis = 1)
     def get_group_average(self, sn):
         """
         calculates group average data 
@@ -63,32 +65,51 @@ class Data():
         group average dataset
         """
         pass
-    pass
 
-def data_df(xdata, ydata, info):
+def get_summary(subj_list = [], atlas_list = []):
     """
     prepare data for scatter plot.
     Place average across one roi on x axis and one 
     on the y axis.
-    xdata (Data class)
-    ydata (Data class)
-    info (info dataframe)
+    Args:
+    subj_list (list) - list of subjects. Example: subj_list = ['sub-01', 'sub-02']
+    atlas_list (list) - list of atlases you want to get the data for. Example: atlas_list = ['SUIT3', 'fs32k']
+    Returns:
+    df (pd.DataFrame) - dataframe containing the summary of data to do the scatterplot
     """
-    # get the average across ROI
-    x = xdata.get_average()
-    y = ydata.get_average()
+    df = pd.DataFrame()
+    for atlas in atlas_list:
+        for s in subj_list:
+            print(f"- Doing {s} in {atlas}")
+            # create instances of the data class
+            D = Data(subj_id=s, ses = 2, atlas = atlas, integ_type='CondHalf')
+            # get data
+            D.load_data()
+            # get the average over the roi
+            D.get_average()
+            dd = D.info.copy()
+            dd['value'] = D.atlas_data
+            df = df.append(dd, ignore_index = True)
 
-    # create a dataframe for 
-
-    return
+    return df
 
 
 if __name__ == "__main__":
-    D_suit3 = Data(subj_id='sub-01', ses = 2, atlas = 'SUIT3', integ_type='CondHalf')
-    D_suit3.get_data()
-    
-    D_fs32k = Data(subj_id='sub-01', ses = 2, atlas = 'fs32k', integ_type='CondHalf')
-    D_fs32k.get_data()
+    df = get_summary(['sub-01'], atlas_list = ['SUIT3', 'fs32k'])
 
+"""
+Example usages:
+# creating a Data class for SUIT 3mm resolution for sub-01
+D_suit3 = Data(subj_id='sub-01', ses = 2, atlas = 'SUIT3', integ_type='CondHalf')
 
-    print('hello')
+# reading the data extracted and saved as cifti 
+Dsuit3.load_data()
+
+# calculating average over the atlas
+Dsuit3.get_average()
+
+# inspecting the Data class created for suit 3 mm resolution
+print(Dsuit3.atlas_data.shape) # averaged data over the region (atlas?)
+print(Dsuit3.data.shape) # data loaded in
+print(Dsuit3.info) # information for the tasks/condition
+"""

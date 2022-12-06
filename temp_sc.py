@@ -21,7 +21,7 @@ deriv_dir = os.path.join(base_dir, 'derivatives')
 
 class Data():
     
-    def __init__(self, subj_id, ses, atlas, integ_type):
+    def __init__(self, subj_id, ses, atlas, parcel = None, integ_type = 'CondHalf'):
         """
         Data class to be used when infering selective recruitment
         Args:
@@ -32,7 +32,9 @@ class Data():
         self.subj_id = subj_id
         self.ses = ses
         self.atlas = atlas
+        self.parcel = parcel
         self.type = integ_type
+        
     def load_data(self):
         """
         extract data for the region of interest

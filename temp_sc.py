@@ -87,7 +87,7 @@ class Cerebellum():
         pass
 
 class Cortex():
-    def __init__(self, subj_id, ses, atlas, integ_type = 'CondHalf'):
+    def __init__(self, subj_id, ses, atlas, hemi = 1, integ_type = 'CondHalf'):
         """
         Data class to be used when infering selective recruitment
         Args:
@@ -99,6 +99,7 @@ class Cortex():
         self.ses = ses
         self.atlas = atlas
         self.type = integ_type
+        self.hemi = hemi
         
     def load_data(self):
         """
@@ -109,6 +110,7 @@ class Cortex():
         data_file = os.path.join(deriv_dir, self.subj_id, 'data', f'{self.subj_id}_space-{self.atlas}_ses-{self.ses:02d}_{self.type}.dscalar.nii')
         data_cifti = nb.load(data_file)
         self.data = data_cifti.get_fdata()
+        self.data = self.data[:, (self.hemi-1)*29759: self.hemi*29759 + 29759]
 
     def agg_data(self, label_img = None, mask_img = None, name = 'cortex_left'):
         """
@@ -191,7 +193,7 @@ def get_summary_cereb(subj_list = [], parcels = {'SUIT3':[None, 'MDTB10', 'Buckn
                     df = df.append(dd, ignore_index = True)
     return df
 
-def get_summary_cortex(subj_list = [], parcels = {'SUIT3':[None, 'MDTB10', 'Buckner7', 'Buckner17']}):
+def get_summary_cortex(subj_list = [], parcels = {'fs32k':[None, 'ROI']}):
     """
     prepare data for scatter plot.
     Place average across one roi on x axis and one 
@@ -203,6 +205,8 @@ def get_summary_cortex(subj_list = [], parcels = {'SUIT3':[None, 'MDTB10', 'Buck
     df (pd.DataFrame) - dataframe containing the summary of data to do the scatterplot
     """
     df = pd.DataFrame()
+    names = ['cortex_left', 'cortex_right']
+    # hemis = ['L', 'R']
     for atlas in parcels.keys():
 
         for parcel in parcels[atlas]:
@@ -210,39 +214,50 @@ def get_summary_cortex(subj_list = [], parcels = {'SUIT3':[None, 'MDTB10', 'Buck
             for s in subj_list:
                 print(f"- Doing {s} in {atlas} {parcel}")
                 # create instances of the data class
-                D = Cerebellum(subj_id=s, ses = 2, atlas = atlas, integ_type='CondHalf')
+                D = Cortex(subj_id=s, ses = 2, atlas = atlas, integ_type='CondHalf')
                 # get data
                 D.load_data()
-                # get the average over eaxh parcel
-                if parcel != None:
-                    mask_img = os.path.join(atlas_suit, 'tpl-SUIT_res-3_gmcmask.nii')
-                    label_img = os.path.join(atlas_suit, f'atl-{parcel}_space-SUIT_dseg.nii')
-                    D.agg_data(label_img=label_img, mask_img=mask_img, name = 'Cerebellum')
 
-                    for region in range(D.parcel_data.shape[1]):
+                for h, hemi in enumerate(['L', 'R']):
+                # get the average over eaxh parcel
+                    if parcel != None:
+                        mask_img = os.path.join(atlas_fs32k, f'tpl-fs32k_hemi-{hemi}_mask.label.gii')
+                        label_img = os.path.join(atlas_fs32k, f'{parcel}.{hemi}.label.gii')
+                        D.agg_data(label_img=label_img, mask_img=mask_img, name = names[h])
+
+                        for region in range(D.parcel_data.shape[1]):
+                            dd = D.info.copy()
+                            
+                            dd['value'] = D.parcel_data[:, region]
+                            dd['atlas'] = atlas
+                            dd['region'] = region
+                            dd['parcellation'] = parcel
+
+                            df = df.append(dd, ignore_index = True)
+                    else:
+                        mask_img = os.path.join(atlas_fs32k, f'tpl-fs32k_hemi-{hemi}_mask.label.gii')
+                        D.agg_data(label_img=mask_img, mask_img=mask_img, name = names[h])
                         dd = D.info.copy()
-                        
-                        dd['value'] = D.parcel_data[:, region]
+                            
+                        dd['value'] = D.parcel_data
                         dd['atlas'] = atlas
-                        dd['region'] = region
+                        dd['region'] = -1
                         dd['parcellation'] = parcel
                         df = df.append(dd, ignore_index = True)
-                else:
-                    D.agg_data(label_img=None, mask_img=None, name = 'Cerebellum')
-                    dd = D.info.copy()
-                        
-                    dd['value'] = D.parcel_data
-                    dd['atlas'] = atlas
-                    dd['region'] = -1
-                    dd['parcellation'] = parcel
-                    df = df.append(dd, ignore_index = True)
 
 
 if __name__ == "__main__":
     subj_list = []
     for s in range(1, 17):
         subj_list.append(f'sub-{s:02d}')
-    df = get_summary(subj_list=subj_list)
+    df_cereb = get_summary_cereb(subj_list=subj_list)
+    df_cortex = get_summary_cortex(subj_list=subj_list)
+
+    df_final = pd.concat([df_cereb, df_cortex], axis = 0)
+
+    # save the dataframe
+    file_name = os.path.join(base_dir, 'summary_sc.csv')
+    df_final.to_csv(file_name)
 
 """
 Example usages:

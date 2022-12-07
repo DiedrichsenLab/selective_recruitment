@@ -4,14 +4,20 @@
 
 # base_dir = <project directory>
 
+# adding functional fusion package
+import sys
+sys.path.append('C:\\Users\\lshah\\OneDrive\\Documents\\Projects\\Functional_Fusion') 
+
 # packages
+import os
 import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import nibabel as nb
 # import nitools as niu
-import os
+
+from atlas_map import *
 
 base_dir = os.path.join('C:\\Users\\lshah\\OneDrive\\Documents\\Data\\FunctionalFusion\\WMFS')
 deriv_dir = os.path.join(base_dir, 'derivatives')
@@ -21,7 +27,7 @@ deriv_dir = os.path.join(base_dir, 'derivatives')
 
 class Data():
     
-    def __init__(self, subj_id, ses, atlas, parcel = None, integ_type = 'CondHalf'):
+    def __init__(self, subj_id, ses, atlas, integ_type = 'CondHalf'):
         """
         Data class to be used when infering selective recruitment
         Args:
@@ -32,7 +38,6 @@ class Data():
         self.subj_id = subj_id
         self.ses = ses
         self.atlas = atlas
-        self.parcel = parcel
         self.type = integ_type
         
     def load_data(self):
@@ -44,7 +49,29 @@ class Data():
         data_file = os.path.join(deriv_dir, self.subj_id, 'data', f'{self.subj_id}_space-{self.atlas}_ses-{self.ses:02d}_{self.type}.dscalar.nii')
         data_cifti = nb.load(data_file)
         self.data = data_cifti.get_fdata()
-        print(self.data.shape)
+    
+    def get_parcel_vol_data(self, label_img, mask_img = None, name = 'cerebellum'):
+        """
+        get data within parcels defined in label image
+        constraining it to the mask image
+        Args:
+        label_img (str)
+        mask_img(str)
+        """
+        parcel_atlas = AtlasVolumeParcel(name,label_img,mask_img)
+        self.get_parcel_data= parcel_atlas.agg_data(self.data,func=np.nanmean)
+
+    def get_parcel_surf_data(self, label_img, mask_img = None, name = 'cortex_left'):
+        """
+        get data within parcels defined in label image
+        constraining it to the mask image
+        Args:
+        label_img (str)
+        mask_img(str)
+        """
+        parcel_atlas = AtlasSurfaceParcel(name,label_img,mask_img)
+        self.get_parcel_data= parcel_atlas.agg_data(self.data,func=np.nanmean)
+        
     def get_data(self):
         """
         method to extract data using functional fusion 
@@ -52,12 +79,14 @@ class Data():
 
         UNDER CONSTRUCTION
         """
+    
     def get_average(self):
         """
         average data across the region of interest
         uses self.info
         """
         self.atlas_data = np.nanmean(self.data, axis = 1)
+    
     def get_group_average(self, sn):
         """
         calculates group average data 
@@ -68,7 +97,7 @@ class Data():
         """
         pass
 
-def get_summary(subj_list = [], atlas_list = []):
+def get_summary(subj_list = [], atlas_list = [], parcels = {'cerebellum': 'mdtb10'}):
     """
     prepare data for scatter plot.
     Place average across one roi on x axis and one 

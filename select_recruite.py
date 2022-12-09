@@ -34,6 +34,8 @@ import nibabel as nb
 
 # extract data within selected parcellation for cortex*
 
+# use connectivity model
+
 # regress cerebellar data onto cortical data 
     # get residuals
 

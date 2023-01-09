@@ -61,9 +61,9 @@ def get_class(dataset_name = "WMFS"):
     return mydataset
 
 # 1. run this case if you have not extracted data for the atlas
-def extract_suit(dataSet, ses_id, type, atlas):
+def extract_suit(dataset_name, ses_id, type, atlas):
     # create an instance of the dataset class
-    dataset = dataSet(data_dir)
+    dataset = get_class(dataset_name)
 
     # extract data for suit atlas
     dataset.extract_all_suit(ses_id,type,atlas)
@@ -71,9 +71,9 @@ def extract_suit(dataSet, ses_id, type, atlas):
     return
 
 # 2. run this case if you have not extracted data for the atlas    
-def extract_fs32K(dataSet, ses_id, type):
+def extract_fs32K(dataset_name, ses_id, type):
     # create an instance of the dataset class
-    dataset = dataSet(data_dir)
+    dataset = get_class(dataset_name)
 
     # extract data for suit atlas
     dataset.extract_all_fs32k(ses_id,type)

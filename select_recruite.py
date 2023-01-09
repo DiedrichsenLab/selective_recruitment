@@ -84,12 +84,12 @@ def agg_data_parcel(data, info, atlas, label_img):
     """
     aggregate data over the voxels/vertices within a parcel.
     Args:
-    data (np.ndarray)
-    atlas (Atlas obj)
-    label_img (str or list of str)
+    data (np.ndarray) - data to be aggregated
+    atlas (Atlas obj) - an instance of the atlas object
+    label_img (list)  - str or list of str representing the label images
 
     Returns:
-    data_parcel (np.ndarray)     
+    data_parcel (np.ndarray) - numpy array #condition-by-#parcels      
     """
 
     # get parcel and parcel axis using the label image
@@ -175,7 +175,7 @@ def get_summary_whole(dataset_name):
     # getting data for all the participants in SUIT space
     cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-02', type='CondHalf', fields=None)
     # getting data for all the participants in fs32k space
-    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-02', type='CondHalf', fields=None)
+    ccdat, _ = Dat.get_data(space='fs32k', ses_id='ses-02', type='CondHalf', fields=None)
 
     # average over the whole structures
     Y = np.nanmean(cdat, axis = 2)
@@ -204,19 +204,68 @@ def get_summary_whole(dataset_name):
     return summary_df
 
 # 6. getting data into a dataframe
-def get_summary_roi():
+def get_summary_roi(dataset_name = "WMFS"):
     """
     prepares a dataframe for plotting the scatterplot
     """
+    # get the dataset class
+    Dat = get_class(dataset_name= dataset_name)
+    # get participants for the dataset
+    T = Dat.get_participants()
+
+    # create instances of atlases for the cerebellum and cortex
+    mask_image = atlas_dir + '/tpl-SUIT' + '/tpl-SUIT_res-3_gmcmask.nii'
+    atlas_cereb = AtlasVolumetric('SUIT3', mask_img=mask_image, structure="cerebellum")
+
+    mask_image = []
+    for hemi in ['L', 'R']:
+        mask_image.append(atlas_dir + '/tpl-fs32k' + f'/tpl-fs32k_hemi-{hemi}_mask.label.gii')
+        name = 'fs32k'
+    atlas_cortex = AtlasSurface(name, mask_img=mask_image, structure=["cortex_left", 'cortex_right'])
+
+    # get label images for the cerebellum and cortex
+    label_cereb = atlas_dir + '/tpl-SUIT' + '/atl-MDTB10_space-SUIT_dseg.nii'
+
+    label_cortex = []
+    for hemi in ['L', 'R']:
+        label_cortex.append(atlas_dir + '/tpl-fs32k' + f'/Icosahedron-42_Sym.32k.{hemi}.label.gii')
+
+
+    # getting data for all the participants in SUIT space
+    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-02', type='CondHalf', fields=None)
+    # getting data for all the participants in fs32k space
+    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-02', type='CondHalf', fields=None)
+
+    # loop through subjects
+    for sub in range(T.participant_id):
+        # get data for the current subject
+        this_data_cereb = cdat[sub, :, :]
+
+        this_data_cortex = ccdat[sub, :, :]
+
+        # pass on the data with the atlas object to the aggregating function
+        cifti_Y = agg_data_parcel(this_data_cereb, info, atlas_cereb, label_cereb)
+        cifti_X = agg_data_parcel(this_data_cortex, info, atlas_cortex, label_cortex)
+        print("- GOT CIFTIS")
     return
 
 
 
 
 if __name__ == "__main__":
-    print("Using WMFS dataset")
-    df = get_summary_whole('WMFS')
-    # save the dataframe for later
-    filepath = os.path.join(base_dir, 'WMFS', 'sc_df_whole_ses-02.tsv')
-    df.to_csv(filepath, index=False,sep='\t')
+    """
+    Getting the summary dataframe for the scatterplot over whole structures
+    """
+    # print("Using WMFS dataset")
+    # df = get_summary_whole('WMFS')
+    # # save the dataframe for later
+    # filepath = os.path.join(base_dir, 'WMFS', 'sc_df_whole_ses-02.tsv')
+    # df.to_csv(filepath, index=False,sep='\t')
+    
+
+    """
+    Getting the summary dataframe for the scatterplot in an ROI-wise manner
+    """
+    get_summary_roi(dataset_name = "WMFS")
+
 

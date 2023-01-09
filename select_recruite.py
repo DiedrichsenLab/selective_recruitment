@@ -15,8 +15,10 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+# modules from functional fusion
 from atlas_map import *
 from dataset import *
+from matrix import indicator
 
 import os
 import nibabel as nb
@@ -25,14 +27,6 @@ import nibabel as nb
 
 # WHAT TO DO?
 # create an instance of the dataset* 
-
-# extract the data within atlas for cerebellum*
-
-# extract the data within atlas for cortex*
-
-# extract data within selected parcellation for cerebellum*
-
-# extract data within selected parcellation for cortex*
 
 # use connectivity model
 
@@ -48,6 +42,9 @@ if not Path(base_dir).exists():
 
 data_dir = base_dir + '/WMFS'
 atlas_dir = base_dir + '/Atlases'
+
+# create an instance of the dataset
+Dat = DataSetWMFS(data_dir)
 
 # 1. run this case if you have not extracted data for the atlas
 def extract_suit(dataSet, ses_id, type, atlas):
@@ -68,129 +65,142 @@ def extract_fs32K(dataSet, ses_id, type):
     dataset.extract_all_fs32k(ses_id,type)
     return
 
-# 3. run after you have extracted data for the cerebellum
-def agg_data_cerebellum(data_dir, subj_id, ses_id = 2, atlas = 'SUIT3', parcel = 'MDTB10', type = 'CondHalf'):
-
+# 3. aggregate data for each parcel within the parcellation
+def agg_data_parcel(data, info, atlas, label_img):
     """
+    aggregate data over the voxels/vertices within a parcel.
     Args:
+    data (np.ndarray)
+    atlas (Atlas obj)
+    label_img (str or list of str)
+
+    Returns:
+    data_parcel (np.ndarray)     
     """
-    df = pd.DataFrame()
-    # get the data for thee current participant
-    data_file = nb.cifti2.load(os.path.join(data_dir, 'derivatives', subj_id, 'data', f'{subj_id}_space-{atlas}_ses-{ses_id:02d}_{type}.dscalar.nii'))
-    data = data_file.get_fdata()
-    # get the corresponding tsv file for condition information
-    info_tsv = pd.read_csv(os.path.join(data_dir, 'derivatives', subj_id, 'data', f'{subj_id}_ses-{ses_id:02d}_info-{type}.tsv'), sep = '\t')
+
+    # get parcel and parcel axis using the label image
+    atlas.get_parcel(label_img=label_img)
+    atlas.get_parcel_axis()
+
+    if len(atlas.label_vector) == 1: # for cerebellum (not divided by hemi)
+        vector = atlas.label_vector[0]
+    else: # for cortex, divided into left and right
+        vector = np.concatenate(atlas.label_vector, axis = 0)
+
+    # create a matrix for aggregating data (cannot use dataset.agg_data now! Need to make changes)
+    C = indicator(vector,positive=True)
+
+    # get the mean across parcel
+    data = np.nan_to_num(data) # replace nans first 
+    data_parcel = (data @ C)/np.sum(C, axis = 0)
+
+    # create a dscale cifti with parcelAxis labels and data_parcel
+    row_axis = info.cond_name
+    row_axis = nb.cifti2.ScalarAxis(row_axis)
+
+    parcel_axis = atlas.parcel_axis
+    # HEAD = cifti2.Cifti2Header.from_axes((row_axis,bm,pa))
+    header = nb.Cifti2Header.from_axes((row_axis, parcel_axis))
+    cifti_img = nb.Cifti2Image(dataobj=data_parcel, header=header)
     
-    # get the resolution for suit
-    suit_res = atlas[-1]
+    return cifti_img
 
-    # get the gray matter mask for the atlas reslution
-    mask_img = os.path.join(atlas_dir, 'tpl-SUIT', f'tpl-SUIT_res-{suit_res}_gmcmask.nii')
-
-    # get the label file for the parcellation
-    label_img = os.path.join(atlas_dir, 'tpl-SUIT', f'atl-{parcel}_space-SUIT_dseg.nii')
-
-    # create an instance of atlas parcel
-    Parcel = AtlasVolumeParcel('cerebellum',label_img,mask_img)
-
-    # get label names (will be used to create dataframe for scatterplot)
-    parcel_axis = Parcel.get_parcel_axis()
-    parcel_names = parcel_axis.name
-
-    # aggregate data over the parcel
-    array_parcel = Parcel.agg_data(data)
-
-    # creating the dataframe
-    for region in np.arange(array_parcel.shape[1]):
-        dd = info_tsv.copy()
-        # get region values
-        array_region = array_parcel[:, region]
-
-        # set region name
-        dd['values'] = array_region
-
-        # set region number
-        dd['region_number'] = region + 1
-
-        # set the region name
-        dd['region_name'] = parcel_names[region]
-
-        # set the subject id
-        dd['subj_id'] = subj_id
-
-        df = pd.concat([df, dd], ignore_index = True)
-
-
-    return df
-
-# 4. run after you have extracted data for the cortex 
-def agg_data_cortex(data_dir, subj_id, ses_id = 2, atlas = 'fs32k', parcel = 'ROI', type = 'CondHalf'):
-    # doing both hemispheres
-    hemi = ['L', 'R']
-    # other options for parcel: Icosahedron-42_Sym
-    df = pd.DataFrame()
-    # get the data for thee current participant
-    data_file = nb.cifti2.load(os.path.join(data_dir, 'derivatives', subj_id, 'data', f'{subj_id}_space-{atlas}_ses-{ses_id:02d}_{type}.dscalar.nii'))
-    data = data_file.get_fdata()
-    # get the corresponding tsv file for condition information
-    info_tsv = pd.read_csv(os.path.join(data_dir, 'derivatives', subj_id, 'data', f'{subj_id}_ses-{ses_id:02d}_info-{type}.tsv'), sep = '\t')
-
-    # get brain models
-    bmf = data_file.header.get_axis(1)
-    data_list = []
-    parcel_list = []
-    for idx, (nam,slc,bm) in enumerate(bmf.iter_structures()):
-        # get the data corresponding to the brain structure
-        data_hemi = data[:, slc]
-
-        # get name to be passed on to the AtlasSurfaceParcel object
-        name = nam[16:].lower()
-
-        # create atlas parcel object
-        # label_img = os.path.join(atlas_dir, 'tpl-fs32k', f'Icosahedron-642_Sym.32k.{hemi[idx]}.label.gii')
-        label_img = os.path.join(atlas_dir, 'tpl-fs32k', f'{parcel}.32k.{hemi[idx]}.label.gii')
-        mask_img = os.path.join(atlas_dir, 'tpl-fs32k', f'tpl-fs32k_hemi-{hemi[idx]}_mask.label.gii')
-        Parcel = AtlasSurfaceParcel(name,label_img,mask_img)
-        data_list.append(Parcel.agg_data(data_hemi))
-
-        # get label names (will be used to create dataframe for scatterplot)
-        parcel_axis = Parcel.get_parcel_axis()
-        parcel_list.append(parcel_axis.name)
-
-    parcel_names = np.concatenate(parcel_list, axis = 0)
-
-    # concatenate into a single array
-    array_parcel = np.concatenate(data_list, axis = 1)
-
-    # creating the dataframe
-    for region in np.arange(array_parcel.shape[1]):
-        dd = info_tsv.copy()
-        # get region values
-        array_region = array_parcel[:, region]
-
-        # set region name
-        dd['values'] = array_region
-
-        # set region number
-        dd['region_number'] = region + 1
-
-        # set the region name
-        dd['region_name'] = parcel_names[region]
-
-        # set the subject id
-        dd['subj_id'] = subj_id
-
-        df = pd.concat([df, dd], ignore_index = True)
-
-    return df
-
-# 4. Alternative: use connectivity model to predict cerebellar activation
+# 4. OPTIONAL step: use connectivity model to predict cerebellar activation
 def predict_cerebellum():
     return
 
 # 5. regress cerebellar data onto step 4 (or 4:alternative)
-def regress():
+def regressXY(X, Y, subtract_mean = False):
+    """
+    regresses Y onto X.
+    Will be used to regress observed cerebellar data onto predicted
+    Args:
+        X (np.ndarray) - predicted cerebellar data for each roi
+        Y (np.ndarray) - observed cerebellar data for each roi
+        subtract_mean (boolean) - subtract mean before regression?
+    Returns:
+        coef (np.ndarray) - regression coefficients
+        residual (np.ndarray) - residuals 
+        R2 (float) - R2 of the regression fit
+    """
+
+    # subtract means?
+    if subtract_mean:
+        X = X - X.mean(axis = 0, keepdims = True)
+        Y = Y - Y.mean(axis = 0, keepdims = True)
+
+    # Estimate regression coefficients
+    X = X.reshape(-1, 1)
+    Y = Y.reshape(-1, 1)
+    coef = np.linalg.inv(X.T@X) @ (X.T@Y)
+    
+    # matrix-wise simple regression?????????????????????????
+    # c = np.sum(X*Y, axis = 0) / np.sum(X*X, axis = 0)
+
+
+    # Calculate residuals
+    residual = Y - X@coef
+
+    # calculate R2 
+    rss = sum(residual**2)
+    tss = sum((Y - np.mean(Y))**2)
+    R2 = 1 - rss/tss
+
+    return coef, residual, R2
+
+# 6. getting data into a dataframe
+def get_summary_whole():
+    """
+    prepares a dataframe for plotting the scatterplot with X and Y averaged over the whole cerebellum and cortex
+    """
+
+    # get participants for the dataset
+    T = Dat.get_participants()
+
+    # getting data for all the participants in SUIT space
+    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-02', type='CondHalf', fields=None)
+    # getting data for all the participants in fs32k space
+    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-02', type='CondHalf', fields=None)
+
+    # average over the whole structures
+    Y = np.nanmean(cdat, axis = 2)
+    X = np.nanmean(ccdat, axis = 2)
+
+    # looping through subjects and doing regression for each subject
+    summary_list = []
+    for sub in range(len(T.participant_id)):
+        info_sub = info.copy()
+        print(f"- getting info for {T.participant_id[sub]}")
+        x = X[sub, :]
+        y = Y[sub, :]
+
+        coef, res, R2 = regressXY(x, y, subtract_mean = False)
+        
+        info_sub["sn"] = T.participant_id[sub]
+        info_sub["X"] = x
+        info_sub["Y"] = y
+        info_sub["res"] = res
+        info_sub["coef"] = coef * np.ones([len(info), 1])
+        info_sub["R2"] = R2 * np.ones([len(info), 1])
+
+        summary_list.append(info_sub)
+    
+    summary_df = pd.concat(summary_list, axis = 0)
+    return summary_df
+
+# 6. getting data into a dataframe
+def get_summary_roi():
+    """
+    prepares a dataframe for plotting the scatterplot
+    """
     return
 
+
+
+
 if __name__ == "__main__":
-    a = agg_data_cerebellum(data_dir, "sub-01", ses_id = 2, atlas = 'SUIT3', parcel = 'MDTB10', type = 'CondHalf')
+    df = get_summary_whole()
+    # save the dataframe for later
+    filepath = os.path.join(data_dir, 'sc_df_whole_ses-02.tsv')
+    df.to_csv(filepath, index=False,sep='\t')
+

@@ -39,12 +39,26 @@ import nibabel as nb
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
 if not Path(base_dir).exists():
     base_dir = '/srv/diedrichsen/data/FunctionalFusion'
-
-data_dir = base_dir + '/WMFS'
 atlas_dir = base_dir + '/Atlases'
 
-# create an instance of the dataset
-Dat = DataSetWMFS(data_dir)
+def get_class(dataset_name = "WMFS"):
+    """
+    gets dataset class for your dataset of interest
+    Args:
+    dataset_name (str) - str representing the name assigned to the dataset in FunctionalFusion folder
+    Returns:
+    mydataset (DataSet object) - object representing the class for the dataset
+    """
+    # get the dataset directory and class
+    T = pd.read_csv(base_dir + '/dataset_description.tsv',sep='\t')
+    T.name = [n.casefold() for n in T.name]
+    i = np.where(dataset_name.casefold() == T.name)[0]
+    if len(i)==0:
+        raise(NameError(f'Unknown dataset: {dataset_name}'))
+    dsclass = getattr(sys.modules[__name__],T.class_name[int(i)])
+    dir_name = base_dir + '/' + T.dir_name[int(i)]
+    mydataset = dsclass(dir_name)
+    return mydataset
 
 # 1. run this case if you have not extracted data for the atlas
 def extract_suit(dataSet, ses_id, type, atlas):
@@ -149,11 +163,12 @@ def regressXY(X, Y, subtract_mean = False):
     return coef, residual, R2
 
 # 6. getting data into a dataframe
-def get_summary_whole():
+def get_summary_whole(dataset_name):
     """
     prepares a dataframe for plotting the scatterplot with X and Y averaged over the whole cerebellum and cortex
     """
-
+    # get the dataset class
+    Dat = get_class(dataset_name= dataset_name)
     # get participants for the dataset
     T = Dat.get_participants()
 
@@ -199,8 +214,9 @@ def get_summary_roi():
 
 
 if __name__ == "__main__":
-    df = get_summary_whole()
+    print("Using WMFS dataset")
+    df = get_summary_whole('WMFS')
     # save the dataframe for later
-    filepath = os.path.join(data_dir, 'sc_df_whole_ses-02.tsv')
+    filepath = os.path.join(base_dir, 'WMFS', 'sc_df_whole_ses-02.tsv')
     df.to_csv(filepath, index=False,sep='\t')
 

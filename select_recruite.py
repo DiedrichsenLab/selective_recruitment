@@ -26,14 +26,10 @@ import nibabel as nb
 
 
 # WHAT TO DO?
-# create an instance of the dataset* 
+
 
 # use connectivity model
 
-# regress cerebellar data onto cortical data 
-    # get residuals
-
-# get summary (a wrapper)
 
 # set the directory of your dataset here:
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
@@ -41,6 +37,7 @@ if not Path(base_dir).exists():
     base_dir = '/srv/diedrichsen/data/FunctionalFusion'
 atlas_dir = base_dir + '/Atlases'
 
+# Creating an instance of Dataset object for your dataset
 def get_class(dataset_name = "WMFS"):
     """
     gets dataset class for your dataset of interest
@@ -238,6 +235,11 @@ def get_summary(dataset_name = "WMFS",
         X = cifti_X.get_fdata()
         Y = cifti_Y.get_fdata()
 
+        # use connectivity model to make predictions
+        # w, scale = get_connectivity() # getting the connectivity weights and scaling factor
+        # Yhat  = predict_cerebellum(X, w, scale)
+        # X = Yhat.copy()
+
         # looping over labels and doing regression for each corresponding label
         for ilabel in range(Y.shape[1]):
             info_sub = info.copy()
@@ -259,8 +261,6 @@ def get_summary(dataset_name = "WMFS",
         
     summary_df = pd.concat(summary_list, axis = 0) 
     return summary_df
-
-
 
 
 if __name__ == "__main__":

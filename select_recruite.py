@@ -13,6 +13,7 @@ sys.path.append('../cortico-cereb_connectivity')
 
 import numpy as np
 import pandas as pd
+import deepdish as dd
 from pathlib import Path
 
 # modules from functional fusion
@@ -26,8 +27,6 @@ import nibabel as nb
 
 
 # WHAT TO DO?
-
-
 # use connectivity model
 
 
@@ -124,17 +123,35 @@ def agg_data_parcel(data, info, atlas, label_img, unite_hemi = True):
     return cifti_img
 
 # 4. OPTIONAL step: use connectivity model to predict cerebellar activation
-def predict_cerebellum(X, w):
+def predict_cerebellum(X, method = 'ridge', smooth = None):
     """
     makes predictions for the cerebellar activation
     uses weights from a linear model (w) and cortical data (X)
     to make predictions Yhat
     Args:
-    X (np.ndarray)
-    w (np.ndarray)
+    X (np.ndarray)      - cortical data
+    path2conn (str)     - path to where connectivity scaling factor and weights are stored
+    method (str)        - method used for estimating connectivity weights. Default is Ridge regression
+    smooth (np.ndarray) - smoothing kernel. if None, data will not be smoothed
     Returns:
-    Yhat (np.ndarray)
+    Yhat (np.ndarray) - predicted cerebellar data
     """
+    # load in the csv file containing the information for best models
+    model_list = pd.read_csv(os.path.join(base_dir, "WMFS", "conn", f'best_models_{method}.csv'))
+
+    # get name of the cortical tesseelation used
+    n_tessels = X.shape[1]
+    cortex_name = f"tessels{n_tessels/2:02d}"
+
+    # get the model_name
+    mymodel = model_list.iloc[model_list["cortex_names"] == cortex_name]
+    model_name = mymodel["models"]
+    model_path = os.path.join(base_dir, "WMFS", "conn", f"{model_name}.h5")
+    
+    # load the model
+    modelh5 = dd.load(model_path)
+
+
     return
 
 # 5. regress cerebellar data onto step 4 (or 4:alternative)
@@ -164,7 +181,6 @@ def regressXY(X, Y, subtract_mean = False):
     
     # matrix-wise simple regression?????????????????????????
     # c = np.sum(X*Y, axis = 0) / np.sum(X*X, axis = 0)
-
 
     # Calculate residuals
     residual = Y - X@coef
@@ -236,8 +252,7 @@ def get_summary(dataset_name = "WMFS",
         Y = cifti_Y.get_fdata()
 
         # use connectivity model to make predictions
-        # w, scale = get_connectivity() # getting the connectivity weights and scaling factor
-        # Yhat  = predict_cerebellum(X, w, scale)
+        # Yhat = predict_cerebellum() # getting the connectivity weights and scaling factor
         # X = Yhat.copy()
 
         # looping over labels and doing regression for each corresponding label
@@ -262,6 +277,8 @@ def get_summary(dataset_name = "WMFS",
     summary_df = pd.concat(summary_list, axis = 0) 
     return summary_df
 
+def get_summary_conn():
+    pass
 
 if __name__ == "__main__":
 

@@ -23,7 +23,7 @@ from matrix import indicator
 
 import os
 import nibabel as nb
-
+import nitools as nt
 
 
 # WHAT TO DO?
@@ -56,23 +56,66 @@ def get_class(dataset_name = "WMFS"):
     mydataset = dsclass(dir_name)
     return mydataset
 
+# Get smoothing matrix
+def get_smooth_mat(atlas, fwhm = 3):
+    """
+    calculates the smoothing matrix to be applied to data
+    Args:
+        atlas - experiment name (fs or wm)
+        fwhm (float)  - fwhm of smoothing kernel
+    Rerurns:
+        smooth_mat (np.ndarray) - smoothing matrix
+    """
+    # get voxel coordinates
+    
+    
+    # calculate euclidean distance
+    euc_dist = nt.euclidean_dist_sq(atlas.vox, atlas.vox)
+
+    smooth_mat = np.exp(-1/2 * euc_dist/(fwhm**2))
+    smooth_mat = smooth_mat /np.sum(smooth_mat, axis = 1);   
+
+    return smooth_mat
+
+def get_parcels_remove(ntessels):
+    """
+    ONLY USE THIS BEFORE RE_RUNNING THE CONNECTIVITY
+    IT GIVES YOU THE TESSELS/PARCELS THAT ARE TO BE EXCLUDED
+    """
+
+    # get the label file for the tesselation
+    tessel_dir = '/srv/diedrichsen/data/Cerebellum/super_cerebellum/sc1/RegionOfInterest/data/group'
+
+    tessel_file = []
+    for h in ['L', 'R']:
+        tessel_file.append(nb.load(os.path.join(tessel_dir, f'tessels{ntessels:04d}.{h}.label.gii')))
+
+    # get the mask used in atlas
+    atlas_cortex, ainfo = am.get_atlas('fs32k', atlas_dir)
+
+    aa = []
+    xx = []
+    for i in [0, 1]:
+        x = tessel_file[i].agg_data()
+        y = atlas_cortex.vertex[i]
+        xy =x[y]
+        aa.append(xy)
+        xx.append(x)
+    aa = np.concatenate(aa)
+    xx = np.concatenate(xx)
+    
+    # find regions that are in xx but not in aa
+    exclude_r = np.unique(xx[~np.isin(xx,aa)])
+
+    return exclude_r
 # 1. run this case if you have not extracted data for the atlas
-def extract_suit(dataset_name, ses_id, type, atlas):
+def extract_data(dataset_name, ses_id, type, atlas):
     # create an instance of the dataset class
     dataset = get_class(dataset_name)
 
     # extract data for suit atlas
-    dataset.extract_all_suit(ses_id,type,atlas)
+    dataset.extract_all(ses_id,type,atlas)
 
-    return
-
-# 2. run this case if you have not extracted data for the atlas    
-def extract_fs32K(dataset_name, ses_id, type):
-    # create an instance of the dataset class
-    dataset = get_class(dataset_name)
-
-    # extract data for suit atlas
-    dataset.extract_all_fs32k(ses_id,type)
     return
 
 # 3. aggregate data for each parcel within the parcellation
@@ -90,7 +133,7 @@ def agg_data_parcel(data, info, atlas, label_img, unite_hemi = True):
     """
     # get parcel and parcel axis using the label image
     atlas.get_parcel(label_img=label_img, unite_hemi = unite_hemi)
-    atlas.get_parcel_axis()
+    # atlas.get_parcel_axis()
 
     if len(atlas.label_vector) == 1: # for cerebellum (not divided by hemi)
         vector = atlas.label_vector[0]
@@ -123,7 +166,7 @@ def agg_data_parcel(data, info, atlas, label_img, unite_hemi = True):
     return cifti_img
 
 # 4. OPTIONAL step: use connectivity model to predict cerebellar activation
-def predict_cerebellum(X, method = 'ridge', smooth = None):
+def predict_cerebellum(X, atlas, info, method = 'ridge', fwhm = 3):
     """
     makes predictions for the cerebellar activation
     uses weights from a linear model (w) and cortical data (X)
@@ -137,22 +180,36 @@ def predict_cerebellum(X, method = 'ridge', smooth = None):
     Yhat (np.ndarray) - predicted cerebellar data
     """
     # load in the csv file containing the information for best models
-    model_list = pd.read_csv(os.path.join(base_dir, "WMFS", "conn", f'best_models_{method}.csv'))
+    model_list = pd.read_csv(os.path.join(base_dir, "WMFS", "conn", f'best_models_{method}.csv'), sep = ',')
 
     # get name of the cortical tesseelation used
     n_tessels = X.shape[1]
     cortex_name = f"tessels{n_tessels/2:02d}"
 
     # get the model_name
-    mymodel = model_list.iloc[model_list["cortex_names"] == cortex_name]
-    model_name = mymodel["models"]
+    mymodel = model_list.loc[model_list["cortex_names"] == cortex_name]
+    model_name = mymodel["models"].values[0]
     model_path = os.path.join(base_dir, "WMFS", "conn", f"{model_name}.h5")
+    scale_path = os.path.join(base_dir, "WMFS", "conn", f"{cortex_name}_scale.h5")
     
-    # load the model
-    modelh5 = dd.load(model_path)
+    # load the model and scale
+    model = dd.io.load(model_path)
+    scale = dd.io.load(scale_path)
+
+    W = model['weights'].copy()
+    Xs = X / scale
+
+    # get smoothing matrix 
+    if fwhm != 0:
+        smooth_mat = get_smooth_mat(atlas, fwhm)
+        W = smooth_mat@W
+
+    # make predictions
+    Yhat = np.dot(Xs, W.T)
+    Yhat = np.r_[Yhat[info.half == 2, :], Yhat[info.sess == 1, :]]
 
 
-    return
+    return Yhat
 
 # 5. regress cerebellar data onto step 4 (or 4:alternative)
 def regressXY(X, Y, subtract_mean = False):
@@ -195,7 +252,7 @@ def regressXY(X, Y, subtract_mean = False):
 # 6. getting data into a dataframe
 def get_summary(dataset_name = "WMFS",
                 cerebellum = 'Buckner7', 
-                cortex = 'yeo7', 
+                cortex = 'Icosahedron-1002.32k', 
                 agg_whole = False):
     """
     prepares a dataframe for plotting the scatterplot
@@ -206,14 +263,15 @@ def get_summary(dataset_name = "WMFS",
     T = Dat.get_participants()
 
     # create instances of atlases for the cerebellum and cortex
-    mask_cereb = atlas_dir + '/tpl-SUIT' + '/tpl-SUIT_res-3_gmcmask.nii'
-    atlas_cereb = AtlasVolumetric('SUIT3', mask_img=mask_cereb, structure="cerebellum")
+    atlas_cereb, ainfo = am.get_atlas('SUIT3conn',atlas_dir)
+    mask_cereb = atlas_dir + '/tpl-SUIT' + '/tpl-SUITconn_res-3_gmcmask.nii'
+    # atlas_cereb = AtlasVolumetric('SUIT3', mask_img=mask_cereb, structure="cerebellum")
 
     mask_cortex = []
     for hemi in ['L', 'R']:
         mask_cortex.append(atlas_dir + '/tpl-fs32k' + f'/tpl-fs32k_hemi-{hemi}_mask.label.gii')
-    name = 'fs32k'
-    atlas_cortex = AtlasSurface(name, mask_img=mask_cortex, structure=["cortex_left", 'cortex_right'])
+    atlas_cortex, ainfo = am.get_atlas('fs32k', atlas_dir)
+    # atlas_cortex = AtlasSurface(name, mask_img=mask_cortex, structure=["cortex_left", 'cortex_right'])
 
     # get label images for the cerebellum and cortex
     if agg_whole: # using masks as labels
@@ -230,7 +288,7 @@ def get_summary(dataset_name = "WMFS",
 
 
     # getting data for all the participants in SUIT space
-    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-02', type='CondHalf', fields=None)
+    cdat, info = Dat.get_data(space='SUIT3conn', ses_id='ses-02', type='CondHalf', fields=None)
     # getting data for all the participants in fs32k space
     ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-02', type='CondHalf', fields=None)
 
@@ -244,16 +302,17 @@ def get_summary(dataset_name = "WMFS",
         this_data_cortex = ccdat[sub, :, :]
 
         # pass on the data with the atlas object to the aggregating function
-        cifti_Y = agg_data_parcel(this_data_cereb, info, atlas_cereb, label_cereb, unite_hemi=False)
+        # cifti_Y = agg_data_parcel(this_data_cereb, info, atlas_cereb, label_cereb, unite_hemi=False)
         cifti_X = agg_data_parcel(this_data_cortex, info, atlas_cortex, label_cortex, unite_hemi=True)
 
         # get data per parcel
         X = cifti_X.get_fdata()
-        Y = cifti_Y.get_fdata()
+        Y = this_data_cereb.copy()
+        # Y = cifti_Y.get_fdata()
 
         # use connectivity model to make predictions
-        # Yhat = predict_cerebellum() # getting the connectivity weights and scaling factor
-        # X = Yhat.copy()
+        Yhat = predict_cerebellum(X, atlas_cereb, info, method = 'ridge', fwhm = 3) # getting the connectivity weights and scaling factor
+        X = Yhat.copy()
 
         # looping over labels and doing regression for each corresponding label
         for ilabel in range(Y.shape[1]):
@@ -277,11 +336,9 @@ def get_summary(dataset_name = "WMFS",
     summary_df = pd.concat(summary_list, axis = 0) 
     return summary_df
 
-def get_summary_conn():
-    pass
-
 if __name__ == "__main__":
 
+    get_parcels_remove(1002)
     """
     Getting the summary dataframe for the scatterplot in an ROI-wise manner
     """
@@ -293,8 +350,8 @@ if __name__ == "__main__":
     """
     Getting the summary dataframe for the scatterplot over whole structures
     """
-    df = get_summary(dataset_name = "WMFS", agg_whole=True)
-    # save the dataframe for later
-    filepath = os.path.join(base_dir, 'WMFS', 'sc_df_whole_ses-02.tsv')
-    df.to_csv(filepath, index = False, sep='\t')
+    # df = get_summary(dataset_name = "WMFS", agg_whole=True)
+    # # save the dataframe for later
+    # filepath = os.path.join(base_dir, 'WMFS', 'sc_df_whole_ses-02.tsv')
+    # df.to_csv(filepath, index = False, sep='\t')
 

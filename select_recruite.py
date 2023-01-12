@@ -350,8 +350,8 @@ if __name__ == "__main__":
     """
     Getting the summary dataframe for the scatterplot over whole structures
     """
-    # df = get_summary(dataset_name = "WMFS", agg_whole=True)
-    # # save the dataframe for later
-    # filepath = os.path.join(base_dir, 'WMFS', 'sc_df_whole_ses-02.tsv')
-    # df.to_csv(filepath, index = False, sep='\t')
+    df = get_summary(dataset_name = "WMFS", agg_whole=True)
+    # save the dataframe for later
+    filepath = os.path.join(base_dir, 'WMFS', 'sc_df_whole_ses-02.tsv')
+    df.to_csv(filepath, index = False, sep='\t')
 

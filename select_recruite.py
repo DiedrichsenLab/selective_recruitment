@@ -146,7 +146,7 @@ def make_roi(dataset_name = "MDTB",
     roi_gifti = make_roi_cortex(cifti_cortex, info_tsv, threshold, contrast = "Verbal2Back")
 
     # save label files
-    nb.save(roi_nifti, Data.atlas_dir + '/tpl-SUIT' + f'/{contrast}_space-SUIT_dseg.nii')
+    nb.save(roi_nifti, Data.atlas_dir + '/tpl-SUIT' + f'/atl-{contrast}_space-SUIT_dseg.nii')
 
     for i, h in enumerate(['L', 'R']):
         nb.save(roi_gifti[i], Data.atlas_dir + '/tpl-fs32k' + f'/{contrast}.32k.{h}.label.gii')
@@ -251,7 +251,7 @@ def agg_data_parcel(data, info, atlas, label_img, unite_hemi = True):
     """
     # get parcel and parcel axis using the label image
     atlas.get_parcel(label_img=label_img, unite_hemi = unite_hemi)
-    # atlas.get_parcel_axis()
+    atlas.get_parcel_axis()
 
     if len(atlas.label_vector) == 1: # for cerebellum (not divided by hemi)
         vector = atlas.label_vector[0]
@@ -389,7 +389,6 @@ def get_summary(dataset_name = "WMFS",
     for hemi in ['L', 'R']:
         mask_cortex.append(atlas_dir + '/tpl-fs32k' + f'/tpl-fs32k_hemi-{hemi}_mask.label.gii')
     atlas_cortex, ainfo = am.get_atlas('fs32k', atlas_dir)
-    # atlas_cortex = AtlasSurface(name, mask_img=mask_cortex, structure=["cortex_left", 'cortex_right'])
 
     # get label images for the cerebellum and cortex
     if agg_whole: # using masks as labels
@@ -420,17 +419,16 @@ def get_summary(dataset_name = "WMFS",
         this_data_cortex = ccdat[sub, :, :]
 
         # pass on the data with the atlas object to the aggregating function
-        # cifti_Y = agg_data_parcel(this_data_cereb, info, atlas_cereb, label_cereb, unite_hemi=False)
+        cifti_Y = agg_data_parcel(this_data_cereb, info, atlas_cereb, label_cereb, unite_hemi=False)
         cifti_X = agg_data_parcel(this_data_cortex, info, atlas_cortex, label_cortex, unite_hemi=True)
 
         # get data per parcel
         X = cifti_X.get_fdata()
-        Y = this_data_cereb.copy()
-        # Y = cifti_Y.get_fdata()
+        Y = cifti_Y.get_fdata()
 
         # use connectivity model to make predictions
-        Yhat = predict_cerebellum(X, atlas_cereb, info, method = 'ridge', fwhm = 3) # getting the connectivity weights and scaling factor
-        X = Yhat.copy()
+        # Yhat = predict_cerebellum(X, atlas_cereb, info, method = 'ridge', fwhm = 3) # getting the connectivity weights and scaling factor
+        # X = Yhat.copy()
 
         # looping over labels and doing regression for each corresponding label
         for ilabel in range(Y.shape[1]):
@@ -475,5 +473,13 @@ if __name__ == "__main__":
     """
     Make regions of interest from MDTB
     """
-    make_roi(dataset_name = "MDTB", threshold=90)
+    # make_roi(dataset_name = "MDTB", threshold=90)
+
+    """
+    Getting the summary dataframe for the scatterplot in an ROI-wise manner
+    """
+    df = get_summary(dataset_name = "WMFS", agg_whole=False, cerebellum="Verbal2Back", cortex="Verbal2Back.32k")
+    # save the dataframe for later
+    filepath = os.path.join(base_dir, 'WMFS', 'sc_df_VWM_ses-02.tsv')
+    df.to_csv(filepath, index = False, sep='\t')
 

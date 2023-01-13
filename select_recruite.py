@@ -117,7 +117,7 @@ def make_roi_cortex(cifti_img, info, threshold, contrast = "Verbal2Back"):
         gifti_img.append(nt.make_label_gifti(1*thresh_data.T, anatomical_struct=name))
     return gifti_img
 
-def make_roi(dataset_name = "MDTB", 
+def make_rois(dataset_name = "MDTB", 
                      contrast = "Verbal2Back", 
                      ses_id = "ses-s1", 
                      threshold = 80):

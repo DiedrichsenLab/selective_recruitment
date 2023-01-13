@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-The functions of atlas definition and atlas mapping
+The functions used to do selective recruitment analysis
 
 Created on 12/09/2022 at 5:25 PM
 Author: Ladan Shahshahani
@@ -26,15 +26,133 @@ import nibabel as nb
 import nitools as nt
 
 
-# WHAT TO DO?
-# use connectivity model
-
-
-# set the directory of your dataset here:
+# set base directory of the functional fusion 
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
 if not Path(base_dir).exists():
     base_dir = '/srv/diedrichsen/data/FunctionalFusion'
 atlas_dir = base_dir + '/Atlases'
+
+# functions used to create nifti/gifti labels for the region of interest
+def extract_group_data(dataset_name = "MDTB"):
+    """
+    """
+    # get the Dataset class
+    Data = get_class(dataset_name=dataset_name)
+    
+    # get group average. will be saved under <dataset_name>/derivatives/group
+    Data.group_average_data(ses_id="ses-s2",
+                                 type="CondAll",
+                                 atlas='SUIT3')
+
+    Data.group_average_data(ses_id="ses-s2",
+                                 type="CondAll",
+                                 atlas='fs32k')
+    return
+
+def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", contrast = "Verbal2Back"):
+    """
+    creates label nifti for roi cerebellum
+    Args:
+    cifti_img (nb.Cifti2) - cifti image of the extracted data
+    info (pd.DataFrame) - pandas dataframe representing info for the dataset
+    threshold (int) - percentile value used in thresholding
+    contrast (str) - name of the contrast
+    Returns:
+    nifti_img (nb.nifti) - nifti of the label created
+    """
+    # get suit data
+    data = cifti_img.get_fdata()
+    # get the row index corresponding to the contrast
+    info_con = info.loc[info.cond_name == contrast]
+    # get the map for the contrast of interest
+    con_map  = data[info_con.cond_num.values -1, :]
+
+    # get threshold value (ignoring nans)
+    percentile_value = np.nanpercentile(con_map, q=threshold)
+
+    # apply threshold
+    thresh_data = con_map > percentile_value
+    # convert 0 to nan
+    thresh_data[thresh_data != False] = np.nan
+
+    # create an instance of the atlas (will be used to convert data to nifti)
+    atlas, a_info = am.get_atlas(atlas_space,atlas_dir)
+    nifti_img = atlas.data_to_nifti(1*thresh_data)
+    return nifti_img
+
+def make_roi_cortex(cifti_img, info, threshold, contrast = "Verbal2Back"):
+    """
+    creates label giftis for left and right hemisphere of the cortex
+    Args:
+    cifti_img (nb.Cifti2) - cifti image of the extracted data
+    info (pd.DataFrame) - pandas dataframe representing info for the dataset
+    threshold (int) - percentile value used in thresholding
+    contrast (str) - name of the contrast
+    Returns:
+    gifti_img (list) - list of label giftis for left and right hemispheres
+    """
+    # get data for left and right hemisphere
+    data_list = nt.surf_from_cifti(cifti_img)
+
+    # threshold and create label
+    gifti_img = []
+    for i, name in zip([0, 1], ['CortexLeft', 'CortexRight']):
+        # get data for the hemisphere
+        data = data_list[i]
+
+        # get the contrast map
+        # get the row index corresponding to the contrast
+        info_con = info.loc[info.cond_name == contrast]
+        # get the map for the contrast of interest
+        con_map  = data[info_con.cond_num.values -1, :]
+
+        # get threshold value (ignoring nans)
+        percentile_value = np.nanpercentile(con_map, q=threshold)
+
+        # apply threshold
+        thresh_data = con_map > percentile_value
+        # convert 0 to nan
+        thresh_data[thresh_data != False] = np.nan
+        # create label gifti
+        gifti_img.append(nt.make_label_gifti(1*thresh_data.T, anatomical_struct=name))
+    return gifti_img
+
+def make_roi(dataset_name = "MDTB", 
+                     contrast = "Verbal2Back", 
+                     ses_id = "ses-s1", 
+                     threshold = 80):
+    """
+    Uses a group contrast to create label files (nifti and gifti)
+    
+    Args:
+    dataset_name (str) - dataset
+    contrast (str) - name of the contrast (see info tsv file) to be used for roi creation
+    ses_id (str) - session id where the contrast of interest is
+    threshold (int) - percentile value (1-100)
+
+    """
+    # get Dataset class for your dataset
+    Data = get_class(dataset_name=dataset_name)
+
+    # load data 
+    cifti_cerebellum = nb.load(Data.data_dir.format("group") + f"/group_space-SUIT3_{ses_id}_CondAll.dscalar.nii")
+    cifti_cortex = nb.load(Data.data_dir.format("group") + f"/group_space-fs32k_{ses_id}_CondAll.dscalar.nii")
+    
+    # load info (will be used to select contrast)
+    info_tsv = pd.read_csv(Data.data_dir.format("group") + f"/group_ses-s1_info-CondAll.tsv", sep="\t")
+
+    # label files for the cerebellum and cortex
+    roi_nifti = make_roi_cerebellum(cifti_cerebellum, info_tsv, threshold, atlas_space = "SUIT3", contrast = "Verbal2Back")
+    roi_gifti = make_roi_cortex(cifti_cortex, info_tsv, threshold, contrast = "Verbal2Back")
+
+    # save label files
+    nb.save(roi_nifti, Data.atlas_dir + '/tpl-SUIT' + f'/{contrast}_space-SUIT_dseg.nii')
+
+    for i, h in enumerate(['L', 'R']):
+        nb.save(roi_gifti[i], Data.atlas_dir + '/tpl-fs32k' + f'/{contrast}.32k.{h}.label.gii')
+
+    return
+
 
 # Creating an instance of Dataset object for your dataset
 def get_class(dataset_name = "WMFS"):
@@ -263,8 +381,8 @@ def get_summary(dataset_name = "WMFS",
     T = Dat.get_participants()
 
     # create instances of atlases for the cerebellum and cortex
-    atlas_cereb, ainfo = am.get_atlas('SUIT3conn',atlas_dir)
-    mask_cereb = atlas_dir + '/tpl-SUIT' + '/tpl-SUITconn_res-3_gmcmask.nii'
+    atlas_cereb, ainfo = am.get_atlas('SUIT3',atlas_dir)
+    mask_cereb = atlas_dir + '/tpl-SUIT' + '/tpl-SUIT_res-3_gmcmask.nii'
     # atlas_cereb = AtlasVolumetric('SUIT3', mask_img=mask_cereb, structure="cerebellum")
 
     mask_cortex = []
@@ -288,7 +406,7 @@ def get_summary(dataset_name = "WMFS",
 
 
     # getting data for all the participants in SUIT space
-    cdat, info = Dat.get_data(space='SUIT3conn', ses_id='ses-02', type='CondHalf', fields=None)
+    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-02', type='CondHalf', fields=None)
     # getting data for all the participants in fs32k space
     ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-02', type='CondHalf', fields=None)
 
@@ -338,20 +456,24 @@ def get_summary(dataset_name = "WMFS",
 
 if __name__ == "__main__":
 
-    get_parcels_remove(1002)
     """
     Getting the summary dataframe for the scatterplot in an ROI-wise manner
     """
-    df = get_summary(dataset_name = "WMFS", agg_whole=False)
-    # save the dataframe for later
-    filepath = os.path.join(base_dir, 'WMFS', 'sc_df_yeo_buckner_7_ses-02.tsv')
-    df.to_csv(filepath, index = False, sep='\t')
+    # df = get_summary(dataset_name = "WMFS", agg_whole=False)
+    # # save the dataframe for later
+    # filepath = os.path.join(base_dir, 'WMFS', 'sc_df_yeo_buckner_7_ses-02.tsv')
+    # df.to_csv(filepath, index = False, sep='\t')
 
     """
     Getting the summary dataframe for the scatterplot over whole structures
     """
-    df = get_summary(dataset_name = "WMFS", agg_whole=True)
-    # save the dataframe for later
-    filepath = os.path.join(base_dir, 'WMFS', 'sc_df_whole_ses-02.tsv')
-    df.to_csv(filepath, index = False, sep='\t')
+    # df = get_summary(dataset_name = "WMFS", agg_whole=True)
+    # # save the dataframe for later
+    # filepath = os.path.join(base_dir, 'WMFS', 'sc_df_whole_ses-02.tsv')
+    # df.to_csv(filepath, index = False, sep='\t')
+
+    """
+    Make regions of interest from MDTB
+    """
+    make_roi(dataset_name = "MDTB", threshold=90)
 

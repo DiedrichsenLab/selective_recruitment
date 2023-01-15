@@ -30,6 +30,8 @@ import nitools as nt
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
 if not Path(base_dir).exists():
     base_dir = '/srv/diedrichsen/data/FunctionalFusion'
+if not Path(base_dir).exists():
+    base_dir = '/cifs/diedrichsen/data/FunctionalFusion'
 atlas_dir = base_dir + '/Atlases'
 
 # functions used to create nifti/gifti labels for the region of interest
@@ -405,9 +407,9 @@ def get_summary(dataset_name = "WMFS",
 
 
     # getting data for all the participants in SUIT space
-    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-02', type='CondHalf', fields=None)
+    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-s2', type='CondHalf', fields=None)
     # getting data for all the participants in fs32k space
-    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-02', type='CondHalf', fields=None)
+    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-s2', type='CondHalf', fields=None)
 
     # loop through subjects and create a dataframe
     summary_list = []
@@ -465,10 +467,10 @@ if __name__ == "__main__":
     """
     Getting the summary dataframe for the scatterplot over whole structures
     """
-    # df = get_summary(dataset_name = "WMFS", agg_whole=True)
-    # # save the dataframe for later
-    # filepath = os.path.join(base_dir, 'WMFS', 'sc_df_whole_ses-02.tsv')
-    # df.to_csv(filepath, index = False, sep='\t')
+    df = get_summary(dataset_name = "MDTB", agg_whole=True)
+    # save the dataframe for later
+    filepath = os.path.join(base_dir, 'MDTB', 'sc_df_whole_ses-s2.tsv')
+    df.to_csv(filepath, index = False, sep='\t')
 
     """
     Make regions of interest from MDTB
@@ -478,8 +480,8 @@ if __name__ == "__main__":
     """
     Getting the summary dataframe for the scatterplot in an ROI-wise manner
     """
-    df = get_summary(dataset_name = "WMFS", agg_whole=False, cerebellum="Verbal2Back", cortex="Verbal2Back.32k")
-    # save the dataframe for later
-    filepath = os.path.join(base_dir, 'WMFS', 'sc_df_VWM_ses-02.tsv')
-    df.to_csv(filepath, index = False, sep='\t')
+    # df = get_summary(dataset_name = "WMFS", agg_whole=False, cerebellum="Verbal2Back", cortex="Verbal2Back.32k")
+    # # save the dataframe for later
+    # filepath = os.path.join(base_dir, 'WMFS', 'sc_df_VWM_ses-02.tsv')
+    # df.to_csv(filepath, index = False, sep='\t')
 

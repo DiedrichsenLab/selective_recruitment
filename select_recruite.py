@@ -32,12 +32,42 @@ if not Path(base_dir).exists():
     base_dir = '/srv/diedrichsen/data/FunctionalFusion'
 atlas_dir = base_dir + '/Atlases'
 
+# run this if data has not been extracted
+def extract_data(dataset_name, ses_id, type, atlas):
+    # create an instance of the dataset class
+    dataset = get_dataset_class(base_dir, dataset = dataset_name)
+
+    # extract data for suit atlas
+    dataset.extract_all(ses_id,type,atlas)
+
+    return
+
+# get data tensor and save it
+def save_data_tensor(dataset = "WMFS",
+                    atlas='SUIT3',
+                    sess='all',
+                    type="CondHalf"):
+    """
+    create a data tensor (n_subj, n_contrast, n_voxel) and saves it
+
+    """
+    # using get_dataset from functional fusion
+    data_tensor, info, Data = get_dataset(base_dir,
+                                          dataset,
+                                          atlas=atlas,
+                                          sess='ses-02',
+                                          type="CondHalf", 
+                                          info_only=False)
+    filename = Data.base_dir + f'/{dataset}_{atlas}_{sess}_{type}.npy'
+    np.save(filename,data_tensor)
+    return 
+
 # functions used to create nifti/gifti labels for the region of interest
 def extract_group_data(dataset_name = "MDTB"):
     """
     """
     # get the Dataset class
-    Data = get_class(dataset_name=dataset_name)
+    Data = get_dataset_class(base_dir, dataset=dataset_name)
     
     # get group average. will be saved under <dataset_name>/derivatives/group
     Data.group_average_data(ses_id="ses-s2",
@@ -132,7 +162,7 @@ def make_rois(dataset_name = "MDTB",
 
     """
     # get Dataset class for your dataset
-    Data = get_class(dataset_name=dataset_name)
+    Data = get_dataset_class(base_dir, dataset=dataset_name)
 
     # load data 
     cifti_cerebellum = nb.load(Data.data_dir.format("group") + f"/group_space-SUIT3_{ses_id}_CondAll.dscalar.nii")
@@ -152,27 +182,6 @@ def make_rois(dataset_name = "MDTB",
         nb.save(roi_gifti[i], Data.atlas_dir + '/tpl-fs32k' + f'/{contrast}.32k.{h}.label.gii')
 
     return
-
-
-# Creating an instance of Dataset object for your dataset
-def get_class(dataset_name = "WMFS"):
-    """
-    gets dataset class for your dataset of interest
-    Args:
-    dataset_name (str) - str representing the name assigned to the dataset in FunctionalFusion folder
-    Returns:
-    mydataset (DataSet object) - object representing the class for the dataset
-    """
-    # get the dataset directory and class
-    T = pd.read_csv(base_dir + '/dataset_description.tsv',sep='\t')
-    T.name = [n.casefold() for n in T.name]
-    i = np.where(dataset_name.casefold() == T.name)[0]
-    if len(i)==0:
-        raise(NameError(f'Unknown dataset: {dataset_name}'))
-    dsclass = getattr(sys.modules[__name__],T.class_name[int(i)])
-    dir_name = base_dir + '/' + T.dir_name[int(i)]
-    mydataset = dsclass(dir_name)
-    return mydataset
 
 # Get smoothing matrix
 def get_smooth_mat(atlas, fwhm = 3):
@@ -226,15 +235,6 @@ def get_parcels_remove(ntessels):
     exclude_r = np.unique(xx[~np.isin(xx,aa)])
 
     return exclude_r
-# 1. run this case if you have not extracted data for the atlas
-def extract_data(dataset_name, ses_id, type, atlas):
-    # create an instance of the dataset class
-    dataset = get_class(dataset_name)
-
-    # extract data for suit atlas
-    dataset.extract_all(ses_id,type,atlas)
-
-    return
 
 # 3. aggregate data for each parcel within the parcellation
 def agg_data_parcel(data, info, atlas, label_img, unite_hemi = True):
@@ -354,7 +354,7 @@ def regressXY(X, Y, subtract_mean = False):
     Y = Y.reshape(-1, 1)
     coef = np.linalg.inv(X.T@X) @ (X.T@Y)
     
-    # matrix-wise simple regression?????????????????????????
+    # matrix-wise simple regression?
     # c = np.sum(X*Y, axis = 0) / np.sum(X*X, axis = 0)
 
     # Calculate residuals
@@ -371,14 +371,45 @@ def regressXY(X, Y, subtract_mean = False):
 def get_summary(dataset_name = "WMFS",
                 cerebellum = 'Buckner7', 
                 cortex = 'Icosahedron-1002.32k', 
-                agg_whole = False):
+                agg_whole = False,
+                ses_id = 'ses-02',
+                type = "CondHalf", 
+                save_tensor = False):
     """
     prepares a dataframe for plotting the scatterplot
     """
-    # get the dataset class
-    Dat = get_class(dataset_name= dataset_name)
-    # get participants for the dataset
-    T = Dat.get_participants()
+    # get dataset class object
+    Data = get_dataset_class(base_dir, dataset=dataset_name)
+
+    # get info
+    info = Data.get_info(ses_id,type)
+
+    # get list of subjects:
+    T = Data.get_participants()
+
+    if save_tensor:
+        # get data tensor for SUIT3
+        save_data_tensor(dataset = dataset_name,
+                        atlas='SUIT3',
+                        sess=ses_id,
+                        type=type)
+
+        # get data tensor for fs32k
+        save_data_tensor(dataset = dataset_name,
+                        atlas='fs32k',
+                        sess=ses_id,
+                        type=type)
+
+
+
+    # load data tensor for SUIT3
+    file_suit = Data.base_dir + f'/{dataset_name}_SUIT3_{ses_id}_{type}.npy'
+    cdat = np.load(file_suit)
+
+    # load data tensor for fs32k
+    file_fs32k = Data.base_dir + f'/{dataset_name}_fs32k_{ses_id}_{type}.npy'
+    ccdat = np.load(file_fs32k)
+    
 
     # create instances of atlases for the cerebellum and cortex
     atlas_cereb, ainfo = am.get_atlas('SUIT3',atlas_dir)
@@ -405,9 +436,9 @@ def get_summary(dataset_name = "WMFS",
 
 
     # getting data for all the participants in SUIT space
-    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-02', type='CondHalf', fields=None)
+    # cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-02', type='CondHalf', fields=None)
     # getting data for all the participants in fs32k space
-    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-02', type='CondHalf', fields=None)
+    # ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-02', type='CondHalf', fields=None)
 
     # loop through subjects and create a dataframe
     summary_list = []
@@ -478,7 +509,11 @@ if __name__ == "__main__":
     """
     Getting the summary dataframe for the scatterplot in an ROI-wise manner
     """
-    df = get_summary(dataset_name = "WMFS", agg_whole=False, cerebellum="Verbal2Back", cortex="Verbal2Back.32k")
+    df = get_summary(dataset_name = "WMFS", 
+                     agg_whole=False, 
+                     cerebellum="Verbal2Back", 
+                     cortex="Verbal2Back.32k", 
+                     save_tensor = False)
     # save the dataframe for later
     filepath = os.path.join(base_dir, 'WMFS', 'sc_df_VWM_ses-02.tsv')
     df.to_csv(filepath, index = False, sep='\t')

@@ -381,6 +381,7 @@ def get_summary(dataset_name = "WMFS",
     Dat = get_class(dataset_name= dataset_name)
     # get participants for the dataset
     T = Dat.get_participants()
+    T = T.reset_index()
 
     # create instances of atlases for the cerebellum and cortex
     atlas_cereb, ainfo = am.get_atlas('SUIT3',atlas_dir)
@@ -407,9 +408,9 @@ def get_summary(dataset_name = "WMFS",
 
 
     # getting data for all the participants in SUIT space
-    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-s2', type='CondHalf', fields=None)
+    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-rsvplanguage', type='CondHalf', fields=None)
     # getting data for all the participants in fs32k space
-    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-s2', type='CondHalf', fields=None)
+    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-rsvplanguage', type='CondHalf', fields=None)
 
     # loop through subjects and create a dataframe
     summary_list = []
@@ -467,9 +468,9 @@ if __name__ == "__main__":
     """
     Getting the summary dataframe for the scatterplot over whole structures
     """
-    df = get_summary(dataset_name = "MDTB", agg_whole=True)
+    df = get_summary(dataset_name = "IBC", agg_whole=True)
     # save the dataframe for later
-    filepath = os.path.join(base_dir, 'MDTB', 'sc_df_whole_ses-s2.tsv')
+    filepath = os.path.join(base_dir, 'IBC', 'sc_df_whole_ses-rsvplanguage.tsv')
     df.to_csv(filepath, index = False, sep='\t')
 
     """

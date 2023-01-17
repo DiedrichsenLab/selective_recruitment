@@ -379,6 +379,7 @@ def get_summary(dataset_name = "WMFS",
     Dat = get_class(dataset_name= dataset_name)
     # get participants for the dataset
     T = Dat.get_participants()
+    T=T.reset_index()
 
     # create instances of atlases for the cerebellum and cortex
     atlas_cereb, ainfo = am.get_atlas('SUIT3',atlas_dir)

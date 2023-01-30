@@ -33,7 +33,7 @@ if not Path(base_dir).exists():
 if not Path(base_dir).exists():
     base_dir = '/cifs/diedrichsen/data/FunctionalFusion'
 atlas_dir = base_dir + '/Atlases'
-
+language_dir = '/cifs/diedrichsen/data/Cerebellum/Language'
 # functions used to create nifti/gifti labels for the region of interest
 def extract_group_data(dataset_name = "MDTB"):
     """
@@ -408,9 +408,9 @@ def get_summary(dataset_name = "WMFS",
 
 
     # getting data for all the participants in SUIT space
-    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-rsvplanguage', type='CondHalf', fields=None)
+    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-s2', type='CondAll', fields=None)
     # getting data for all the participants in fs32k space
-    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-rsvplanguage', type='CondHalf', fields=None)
+    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-s2', type='CondAll', fields=None)
 
     # loop through subjects and create a dataframe
     summary_list = []
@@ -468,9 +468,9 @@ if __name__ == "__main__":
     """
     Getting the summary dataframe for the scatterplot over whole structures
     """
-    df = get_summary(dataset_name = "IBC", agg_whole=True)
+    df = get_summary(dataset_name = "MDTB", agg_whole=True)
     # save the dataframe for later
-    filepath = os.path.join(base_dir, 'IBC', 'sc_df_whole_ses-rsvplanguage.tsv')
+    filepath = os.path.join(language_dir, 'MDTB', 'whole_ses-s2.tsv')
     df.to_csv(filepath, index = False, sep='\t')
 
     """
@@ -485,4 +485,5 @@ if __name__ == "__main__":
     # # save the dataframe for later
     # filepath = os.path.join(base_dir, 'WMFS', 'sc_df_VWM_ses-02.tsv')
     # df.to_csv(filepath, index = False, sep='\t')
+
 

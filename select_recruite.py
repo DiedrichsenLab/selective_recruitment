@@ -29,12 +29,6 @@ import os
 import nibabel as nb
 import nitools as nt
 
-
-#TODO:
-#### 1. don't save data tensor inside the folders for functional fusion
-#### 2. fix the code and make it compatible with new changes
-
-
 # set base directory of the functional fusion 
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
 if not Path(base_dir).exists():
@@ -71,7 +65,7 @@ def extract_group_data(dataset_name = "MDTB"):
     return
 
 # Get smoothing matrix
-def get_smooth_mat(atlas, fwhm = 3):
+def get_smooth_matrix(atlas, fwhm = 3):
     """
     calculates the smoothing matrix to be applied to data
     Args:
@@ -92,7 +86,7 @@ def get_smooth_mat(atlas, fwhm = 3):
     return smooth_mat
 
 # OPTIONAL step: use connectivity model to predict cerebellar activation
-def predict_cerebellum(W, scale, X, atlas, info, fwhm = 3):
+def predict_cerebellum(W, scale, X, atlas, info, fwhm = 0):
     """
     makes predictions for the cerebellar activation
     uses weights from a linear model (w) and cortical data (X)
@@ -106,15 +100,11 @@ def predict_cerebellum(W, scale, X, atlas, info, fwhm = 3):
     Yhat (np.ndarray) - predicted cerebellar data
     """
 
-    # Get model predictions
-    # W = fitted_model.coef_
-    # scale = fitted_model.scale_ 
-
     X = X / scale
 
     # get smoothing matrix 
     if fwhm != 0:
-        smooth_mat = get_smooth_mat(atlas, fwhm)
+        smooth_mat = get_smooth_matrix(atlas, fwhm)
         W = smooth_mat@W
 
     # make predictions
@@ -122,7 +112,7 @@ def predict_cerebellum(W, scale, X, atlas, info, fwhm = 3):
     Yhat = np.r_[Yhat[info.half == 2, :], Yhat[info.half == 1, :]]
     return Yhat
 
-# regress cerebellar data onto step 4 (or 4:alternative)
+# regress cerebellar data onto cortical/cerebellar predictions
 def regressXY(X, Y, fit_intercept = False):
     """
     regresses Y onto X.
@@ -167,8 +157,8 @@ def regressXY(X, Y, fit_intercept = False):
 
     return model[1], residual, R2
 
-# getting data into a dataframe
-def get_summary(outpath = None,
+# getting data into a dataframe (roi-wise)
+def get_summary_roi(outpath = None,
                 dataset_name = "WMFS",
                 cerebellum = 'Buckner7', 
                 cortex = 'Icosahedron-1002.32k', 
@@ -238,10 +228,6 @@ def get_summary(outpath = None,
     atlas_cereb.get_parcel(label_cereb)
     atlas_cortex.get_parcel(label_cortex, unite_struct = True)
 
-    # get parcel axis for both atlases
-    # atlas_cereb.get_parcel_axis()
-    # atlas_cortex.get_parcel_axis()
-
     # loop through subjects and create a dataframe
     summary_list = []
     for sub in range(len(T.participant_id)):
@@ -284,7 +270,7 @@ def get_summary(outpath = None,
     summary_df = pd.concat(summary_list, axis = 0) 
     return summary_df
 
-# 
+# getting data into a dataframe (using connectivity)
 def get_summary_conn(outpath = None,
                      dataset_name = "WMFS",
                      method = 'L2Regression',
@@ -309,13 +295,13 @@ def get_summary_conn(outpath = None,
 
     if save_tensor:
         # get data tensor for SUIT3
-        save_data_tensor(dataset = dataset_name,
+        prep.save_data_tensor(dataset = dataset_name,
                         atlas='SUIT3',
                         sess=ses_id,
                         type=type)
 
         # get data tensor for fs32k
-        save_data_tensor(dataset = dataset_name,
+        prep.save_data_tensor(dataset = dataset_name,
                         atlas='fs32k',
                         sess=ses_id,
                         type=type)
@@ -345,10 +331,6 @@ def get_summary_conn(outpath = None,
     # get parcel for both atlases
     atlas_cereb.get_parcel(label_cereb)
     atlas_cortex.get_parcel(label_cortex, unite_struct = False)
-
-
-    # get the connectivity model name
-    model_name = f"{parcellation}_{conn_ses_id}_{method}_logalpha_{log_alpha}"
 
     # get dataset class for the connectivity training dataset
     path2file = os.path.join(prep.conn_dir, conn_dataset, "train")

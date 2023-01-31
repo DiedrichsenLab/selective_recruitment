@@ -35,35 +35,6 @@ if not Path(base_dir).exists():
     base_dir = '/srv/diedrichsen/data/FunctionalFusion'
 atlas_dir = base_dir + '/Atlases'
 
-# run this if data has not been extracted
-def extract_data(dataset_name, ses_id, type, atlas):
-    # create an instance of the dataset class
-    dataset = get_dataset_class(base_dir, dataset = dataset_name)
-
-    # extract data for suit atlas
-    dataset.extract_all(ses_id,type,atlas)
-    return
-
-# functions used to create nifti/gifti labels for the region of interest
-def extract_group_data(dataset_name = "MDTB"):
-    """
-    Extract group average data and saves it
-    Args: 
-        dataset_name (str) - name of the dataset (as in Functional fusion directory)
-    """
-    # get the Dataset class
-    Data = get_dataset_class(base_dir, dataset=dataset_name)
-    
-    # get group average. will be saved under <dataset_name>/derivatives/group
-    Data.group_average_data(ses_id="ses-s2",
-                                 type="CondAll",
-                                 atlas='SUIT3')
-
-    Data.group_average_data(ses_id="ses-s2",
-                                 type="CondAll",
-                                 atlas='fs32k')
-    return
-
 # Get smoothing matrix
 def get_smooth_matrix(atlas, fwhm = 3):
     """

@@ -35,7 +35,7 @@ if not Path(base_dir).exists():
     base_dir = '/srv/diedrichsen/data/FunctionalFusion'
 atlas_dir = base_dir + '/Atlases'
 
-# Get smoothing matrix
+# Get smoothing matrix, can be used to smooth the weights (for connectivity)
 def get_smooth_matrix(atlas, fwhm = 3):
     """
     calculates the smoothing matrix to be applied to data
@@ -56,17 +56,19 @@ def get_smooth_matrix(atlas, fwhm = 3):
 
     return smooth_mat
 
-# OPTIONAL step: use connectivity model to predict cerebellar activation
-def predict_cerebellum(W, scale, X, atlas, info, fwhm = 0):
+# use connectivity model to predict cerebellar activation
+def predict_cerebellum(weights, scale, X, atlas, info, fwhm = 0):
     """
     makes predictions for the cerebellar activation
     uses weights from a linear model (w) and cortical data (X)
     to make predictions Yhat
     Args:
     X (np.ndarray)      - cortical data
-    path2conn (str)     - path to where connectivity scaling factor and weights are stored
-    method (str)        - method used for estimating connectivity weights. Default is Ridge regression
-    smooth (np.ndarray) - smoothing kernel. if None, data will not be smoothed
+    weights (np.ndarray) - connectivity weights
+    scale (np.ndarray) - used to scale data
+    atlas (atlas object) - atlas object (will be used in smoothing)
+    info (pd.DataFrame) - pandas dataframe representing task info
+    fwhm (int) - smoothing
     Returns:
     Yhat (np.ndarray) - predicted cerebellar data
     """
@@ -76,10 +78,10 @@ def predict_cerebellum(W, scale, X, atlas, info, fwhm = 0):
     # get smoothing matrix 
     if fwhm != 0:
         smooth_mat = get_smooth_matrix(atlas, fwhm)
-        W = smooth_mat@W
+        weights = smooth_mat@weights
 
     # make predictions
-    Yhat = np.dot(X, W.T)
+    Yhat = np.dot(X, weights.T)
     Yhat = np.r_[Yhat[info.half == 2, :], Yhat[info.half == 1, :]]
     return Yhat
 
@@ -280,11 +282,11 @@ def get_summary_conn(outpath = None,
 
 
     # load data tensor for SUIT3
-    file_suit = Data.base_dir + f'/{dataset_name}_SUIT3_{ses_id}_{type}.npy'
+    file_suit = outpath + f'/{dataset_name}_SUIT3_{ses_id}_{type}.npy'
     cdat = np.load(file_suit)
 
     # load data tensor for fs32k
-    file_fs32k = Data.base_dir + f'/{dataset_name}_fs32k_{ses_id}_{type}.npy'
+    file_fs32k = outpath + f'/{dataset_name}_fs32k_{ses_id}_{type}.npy'
     ccdat = np.load(file_fs32k)
     
 
@@ -306,7 +308,7 @@ def get_summary_conn(outpath = None,
     # get dataset class for the connectivity training dataset
     path2file = os.path.join(prep.conn_dir, conn_dataset, "train")
    
-    weights = np.load(os.path.join(path2file, f"{parcellation}_Sym.32k_{conn_ses_id}_{conn_method}_logalpha_{log_alpha}_best_weights.npy"))
+    weights = np.load(os.path.join(path2file, f"{parcellation}_{conn_ses_id}_{conn_method}_logalpha_{log_alpha}_best_weights.npy"))
     scale = np.load(os.path.join(path2file, f'{conn_dataset}_scale.npy'))
 
 
@@ -325,16 +327,19 @@ def get_summary_conn(outpath = None,
         X_parcel = agg_parcels(this_data_cortex,atlas_cortex.label_vector,fcn=np.nanmean)
         
         # get mean across halves
-        X = np.nanmean(np.concatenate([X[info.half == 1, :], X[info.half == 2, :]], axis = 1), axis = 1)
-        Y = np.nanmean(np.concatenate([Y[info.half == 1, :], Y[info.half == 2, :]], axis = 1), axis = 1)
+        X = np.nanmean(np.concatenate([X_parcel[info.half == 1, :], X_parcel[info.half == 2, :]], axis = 1), axis = 1)
+        Y = np.nanmean(np.concatenate([Y_parcel[info.half == 1, :], Y_parcel[info.half == 2, :]], axis = 1), axis = 1)
         X = X.reshape(-1, 1)
-        YY = Y.reshape(-1, 1)
+        Y = Y.reshape(-1, 1)
         
 
         # use connectivity model to make predictions
         Yhat = predict_cerebellum(weights, scale, X_parcel, atlas_cereb, info, fwhm = 0) # getting the connectivity weights and scaling factor
         Yhat_parcel = agg_parcels(Yhat,atlas_cereb.label_vector,fcn=np.nanmean)
         XX = Yhat_parcel.copy()
+        # average over halves
+        XX = np.nanmean(np.concatenate([X_parcel[info.half == 1, :], X_parcel[info.half == 2, :]], axis = 1), axis = 1)
+        XX = XX.reshape(-1, 1)
 
         # looping over labels and doing regression for each corresponding label
         for ilabel in range(Y_parcel.shape[1]):
@@ -342,12 +347,12 @@ def get_summary_conn(outpath = None,
             info_sub = info_sub.loc[info.half == 1]
             print(f"- subject {T.participant_id[sub]} label {ilabel+1}")
             x = XX[:, ilabel]
-            y = YY[:, ilabel]
+            y = Y[:, ilabel]
 
             coef, res, R2 = regressXY(x, y, fit_intercept = False)
 
             info_sub["sn"] = T.participant_id[sub]
-            info_sub["Yhat"] = x
+            info_sub["X"] = x
             info_sub["Y"]    = y
             info_sub["res"]  = res
             info_sub["coef"] = coef * np.ones([len(info_sub), 1])

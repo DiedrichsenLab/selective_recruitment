@@ -282,11 +282,11 @@ def get_summary_conn(outpath = None,
 
 
     # load data tensor for SUIT3
-    file_suit = outpath + f'/{dataset_name}_SUIT3_{ses_id}_{type}.npy'
+    file_suit = outpath + f'{dataset_name}_SUIT3_{ses_id}_{type}.npy'
     cdat = np.load(file_suit)
 
     # load data tensor for fs32k
-    file_fs32k = outpath + f'/{dataset_name}_fs32k_{ses_id}_{type}.npy'
+    file_fs32k = outpath + f'{dataset_name}_fs32k_{ses_id}_{type}.npy'
     ccdat = np.load(file_fs32k)
     
 

@@ -31,7 +31,7 @@ def prep_tensor():
    return
 
 #  
-def prep_sc_whole(outpath = prep.conn_dir):
+def prep_sc_whole(outpath = prep.conn_dir+ '/WMFS'):
     """
     getting the summary dataframe for the scatterplot with the averaged over structures
     """
@@ -45,7 +45,7 @@ def prep_sc_whole(outpath = prep.conn_dir):
     return
 
 # 
-def prep_sc_roi(outpath = prep.conn_dir):
+def prep_sc_roi(outpath = prep.conn_dir + '/WMFS'):
     """
     Getting the summary dataframe for the scatterplot in an ROI-wise manner
     """
@@ -62,7 +62,7 @@ def prep_sc_roi(outpath = prep.conn_dir):
     return
 
 # 
-def prep_sc_conn(outpath = prep.conn_dir):
+def prep_sc_conn(outpath = prep.conn_dir + '/WMFS'):
     """
     Getting the summary dataframe for the scatterplot in an ROI-wise manner
     """

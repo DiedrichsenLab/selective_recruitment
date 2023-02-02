@@ -23,7 +23,7 @@ from dataset import *
 from matrix import indicator
 
 # modules from connectivity
-import prepare_data as prep
+import prepare_data as cprep
 
 import os
 import nibabel as nb
@@ -72,7 +72,7 @@ def predict_cerebellum(weights, scale, X, atlas, info, fwhm = 0):
     Returns:
     Yhat (np.ndarray) - predicted cerebellar data
     """
-
+    # apply scaling
     X = X / scale
 
     # get smoothing matrix 
@@ -106,11 +106,8 @@ def regressXY(X, Y, fit_intercept = False):
     if fit_intercept:
         X = np.c_[ np.ones(X.shape[0]), X ]  
     # coef = np.linalg.inv(X.T@X) @ (X.T@Y)
-    # coef = np.dot(np.linalg.inv(np.dot(X.T,X)),np.dot(X.T,Y))
-
-    # z,resid,rank,sigma = np.linalg.lstsq(X,Y)
     
-    # # matrix-wise simple regression?
+    # # matrix-wise simple regression? NOT USED HERE
     # # c = np.sum(X*Y, axis = 0) / np.sum(X*X, axis = 0)
 
     # # Calculate residuals
@@ -121,7 +118,7 @@ def regressXY(X, Y, fit_intercept = False):
     model = np.polyfit(X, Y, 1)
     predict = np.poly1d(model)
     residual = Y - predict(X)
-    print(sum(residual))
+    # print(sum(residual))
 
     # calculate R2 
     rss = sum(residual**2)
@@ -130,132 +127,23 @@ def regressXY(X, Y, fit_intercept = False):
 
     return model[1], residual, R2
 
-# getting data into a dataframe (roi-wise)
-def get_summary_roi(outpath = None,
-                dataset_name = "WMFS",
-                cerebellum = 'Buckner7', 
-                cortex = 'Icosahedron-1002.32k', 
-                agg_whole = False,
-                ses_id = 'ses-02',
-                type = "CondHalf", 
-                save_tensor = False):
-    """
-    prepares a dataframe for plotting the scatterplot
-    """
-    # get dataset class object
-    Data = get_dataset_class(base_dir, dataset=dataset_name)
-
-    # get info
-    info = Data.get_info(ses_id,type)
-
-    # get list of subjects:
-    T = Data.get_participants()
-
-    if save_tensor:
-        # get data tensor for SUIT3
-        prep.save_data_tensor(outpath=outpath,
-                        dataset = dataset_name,
-                        atlas='SUIT3',
-                        sess=ses_id,
-                        type=type)
-
-        # get data tensor for fs32k
-        prep.save_data_tensor(outpath=outpath,
-                        dataset = dataset_name,
-                        atlas='fs32k',
-                        sess=ses_id,
-                        type=type)
-
-    # load data tensor for SUIT3
-    file_suit = outpath + f'/{dataset_name}_SUIT3_{ses_id}_{type}.npy'
-    cdat = np.load(file_suit)
-
-    # load data tensor for fs32k
-    file_fs32k = outpath + f'/{dataset_name}_fs32k_{ses_id}_{type}.npy'
-    ccdat = np.load(file_fs32k)
-    
-
-    # create instances of atlases for the cerebellum and cortex
-    atlas_cereb, ainfo = am.get_atlas('SUIT3',atlas_dir)
-    mask_cereb = atlas_dir + '/tpl-SUIT' + '/tpl-SUIT_res-3_gmcmask.nii'
-
-    mask_cortex = []
-    for hemi in ['L', 'R']:
-        mask_cortex.append(atlas_dir + '/tpl-fs32k' + f'/tpl-fs32k_hemi-{hemi}_mask.label.gii')
-    atlas_cortex, ainfo = am.get_atlas('fs32k', atlas_dir)
-
-    # get label images for the cerebellum and cortex
-    if agg_whole: # using masks as labels
-        # using 1 label over the whole structure (mask = 0 where there's no data mask = 1 otherwise)
-        label_cereb = mask_cereb
-        label_cortex = mask_cortex
-    else:
-
-        label_cereb = atlas_dir + '/tpl-SUIT' + f'/atl-{cerebellum}_space-SUIT_dseg.nii'
-
-        label_cortex = []
-        for hemi in ['L', 'R']:
-            label_cortex.append(atlas_dir + '/tpl-fs32k' + f'/{cortex}.{hemi}.label.gii')
-
-    # get parcel for both atlases
-    atlas_cereb.get_parcel(label_cereb)
-    atlas_cortex.get_parcel(label_cortex, unite_struct = True)
-
-    # loop through subjects and create a dataframe
-    summary_list = []
-    for sub in range(len(T.participant_id)):
-        
-        # get data for the current subject
-        this_data_cereb = cdat[sub, :, :]
-
-        this_data_cortex = ccdat[sub, :, :]
-
-        # get mean across voxels within parcel
-        Y = agg_parcels(this_data_cereb,atlas_cereb.label_vector,fcn=np.nanmean)
-        X = agg_parcels(this_data_cortex,atlas_cortex.label_vector,fcn=np.nanmean)
-
-        # get mean across halves
-        X = np.nanmean(np.concatenate([X[info.half == 1, :], X[info.half == 2, :]], axis = 1), axis = 1)
-        Y = np.nanmean(np.concatenate([Y[info.half == 1, :], Y[info.half == 2, :]], axis = 1), axis = 1)
-        X = X.reshape(-1, 1)
-        Y = Y.reshape(-1, 1)
-
-        # looping over labels and doing regression for each corresponding label
-        for ilabel in range(Y.shape[1]):
-            info_sub = info.copy()
-            info_sub = info_sub.loc[info_sub.half == 1]
-            print(f"- subject {T.participant_id[sub]} label {ilabel+1}")
-            x = X[:, ilabel]
-            y = Y[:, ilabel]
-
-            coef, res, R2 = regressXY(x, y, fit_intercept = False)
-
-            info_sub["sn"] = T.participant_id[sub]
-            info_sub["X"] = x
-            info_sub["Y"] = y
-            info_sub["res"] = res
-            info_sub["coef"] = coef * np.ones([len(info_sub), 1])
-            info_sub["R2"] = R2 * np.ones([len(info_sub), 1])
-            info_sub['label'] = (ilabel+1) * np.ones([len(info_sub), 1])
-
-            summary_list.append(info_sub)
-        
-    summary_df = pd.concat(summary_list, axis = 0) 
-    return summary_df
-
-# getting data into a dataframe (using connectivity)
-def get_summary_conn(outpath = None,
+# getting data into a dataframe
+def get_summary(outpath = None,
                      dataset_name = "WMFS",
-                     method = 'L2Regression',
-                     cereb_roi = "wm_verbal", 
-                     parcellation = 'Icosahedron-1002.32k', 
+                     cerebellum = "wm_verbal", 
+                     cortex = 'Icosahedron-1002.32k', 
+                     predict = True, 
                      conn_dataset = 'MDTB',
                      conn_ses_id  = 'ses-s1',
                      conn_method = "L2Regression", 
                      log_alpha = 8, 
                      ses_id = 'ses-02',
-                     type = "CondHalf", 
+                     type = "CondHalf",
+                     unite_struct = False, 
                      save_tensor = False):
+    """
+    prepares a dataframe for plotting the scatterplot
+    """
 
     # get dataset class object
     Data = get_dataset_class(base_dir, dataset=dataset_name)
@@ -268,25 +156,25 @@ def get_summary_conn(outpath = None,
 
     if save_tensor:
         # get data tensor for SUIT3
-        prep.save_data_tensor(dataset = dataset_name,
+        cprep.save_data_tensor(dataset = dataset_name,
                         atlas='SUIT3',
                         sess=ses_id,
                         type=type)
 
         # get data tensor for fs32k
-        prep.save_data_tensor(dataset = dataset_name,
+        cprep.save_data_tensor(dataset = dataset_name,
                         atlas='fs32k',
                         sess=ses_id,
                         type=type)
 
 
 
-    # load data tensor for SUIT3
-    file_suit = outpath + f'{dataset_name}_SUIT3_{ses_id}_{type}.npy'
+    # load data tensor for SUIT3 (TODO: add an option to specify atlases other than SUIT3 and fs32k)
+    file_suit = outpath + f'/{dataset_name}/{dataset_name}_SUIT3_{ses_id}_{type}.npy'
     cdat = np.load(file_suit)
 
     # load data tensor for fs32k
-    file_fs32k = outpath + f'{dataset_name}_fs32k_{ses_id}_{type}.npy'
+    file_fs32k = outpath + f'/{dataset_name}/{dataset_name}_fs32k_{ses_id}_{type}.npy'
     ccdat = np.load(file_fs32k)
     
 
@@ -295,71 +183,78 @@ def get_summary_conn(outpath = None,
     atlas_cortex, ainfo = am.get_atlas('fs32k', atlas_dir)
 
     # get label files for cerebellum and cortex
-    label_cereb = atlas_dir + '/tpl-SUIT' + f'/atl-{cereb_roi}_space-SUIT_dseg.nii'
-
+    # NOTE: To average over cerebellum or cortex, pass on masks as label files
+    label_cereb = atlas_dir + '/tpl-SUIT' + f'/atl-{cerebellum}_space-SUIT_dseg.nii'
     label_cortex = []
     for hemi in ['L', 'R']:
-        label_cortex.append(atlas_dir + '/tpl-fs32k' + f'/{parcellation}.{hemi}.label.gii')
+        label_cortex.append(atlas_dir + '/tpl-fs32k' + f'/{cortex}.{hemi}.label.gii')
 
     # get parcel for both atlases
     atlas_cereb.get_parcel(label_cereb)
-    atlas_cortex.get_parcel(label_cortex, unite_struct = False)
+    atlas_cortex.get_parcel(label_cortex, unite_struct = unite_struct)
 
-    # get dataset class for the connectivity training dataset
-    path2file = os.path.join(prep.conn_dir, conn_dataset, "train")
-   
-    weights = np.load(os.path.join(path2file, f"{parcellation}_{conn_ses_id}_{conn_method}_logalpha_{log_alpha}_best_weights.npy"))
-    scale = np.load(os.path.join(path2file, f'{conn_dataset}_scale.npy'))
+    # get connectivity stuff:
+    if predict:
+        conn_dir = os.path.join(cprep.conn_dir, conn_dataset, "train")
+        weights = np.load(os.path.join(conn_dir, f"{cortex}_{conn_ses_id}_{conn_method}_logalpha_{log_alpha}_best_weights.npy"))
+        scale = np.load(os.path.join(conn_dir, f'{conn_dataset}_scale.npy'))
 
 
     # loop through subjects and create a dataframe
     summary_list = []
     for sub in range(len(T.participant_id)):
-        print(f"- Doing {sub}")
         # get data for the current subject
         this_data_cereb = cdat[sub, :, :]
-
         this_data_cortex = ccdat[sub, :, :]
 
         # pass on the data with the atlas object to the aggregating function
         # get mean across voxels within parcel
         Y_parcel = agg_parcels(this_data_cereb,atlas_cereb.label_vector,fcn=np.nanmean)
-        X_parcel = agg_parcels(this_data_cortex,atlas_cortex.label_vector,fcn=np.nanmean)
-        
-        # get mean across halves
-        X = np.nanmean(np.concatenate([X_parcel[info.half == 1, :], X_parcel[info.half == 2, :]], axis = 1), axis = 1)
-        Y = np.nanmean(np.concatenate([Y_parcel[info.half == 1, :], Y_parcel[info.half == 2, :]], axis = 1), axis = 1)
-        X = X.reshape(-1, 1)
-        Y = Y.reshape(-1, 1)
-        
+        X_tessel = agg_parcels(this_data_cortex,atlas_cortex.label_vector,fcn=np.nanmean)
+
+        # replacing nans with 0
+        X_tessel = np.nan_to_num(X_tessel)
+        Y_parcel = np.nan_to_num(Y_parcel)
 
         # use connectivity model to make predictions
-        Yhat = predict_cerebellum(weights, scale, X_parcel, atlas_cereb, info, fwhm = 0) # getting the connectivity weights and scaling factor
-        Yhat_parcel = agg_parcels(Yhat,atlas_cereb.label_vector,fcn=np.nanmean)
-        XX = Yhat_parcel.copy()
-        # average over halves
-        XX = np.nanmean(np.concatenate([X_parcel[info.half == 1, :], X_parcel[info.half == 2, :]], axis = 1), axis = 1)
-        XX = XX.reshape(-1, 1)
+        if predict:
+            Yhat = predict_cerebellum(weights, scale, X_tessel, atlas_cereb, info, fwhm = 0) # getting the connectivity weights and scaling factor
+            # get mean across voxels within parcel
+            Yhat_parcel = agg_parcels(Yhat,atlas_cereb.label_vector,fcn=np.nanmean)
+            # average over halves
+            X_parcel = Yhat_parcel.copy()
+        else:
+            X_parcel = X_tessel.copy()
+        
+        # average over two halves (NOTE: This will be removed)
+        X = np.nanmean(np.concatenate([X_parcel[info.half == 1, :, np.newaxis], X_parcel[info.half == 2, :, np.newaxis]], axis = 2), axis = 2)
+        Y = np.nanmean(np.concatenate([Y_parcel[info.half == 1, :, np.newaxis], Y_parcel[info.half == 2, :, np.newaxis]], axis = 2), axis = 2)
 
         # looping over labels and doing regression for each corresponding label
-        for ilabel in range(Y_parcel.shape[1]):
+        for ilabel in range(Y.shape[1]):
             info_sub = info.copy()
             info_sub = info_sub.loc[info.half == 1]
             print(f"- subject {T.participant_id[sub]} label {ilabel+1}")
-            x = XX[:, ilabel]
+            x = X[:, ilabel]
             y = Y[:, ilabel]
 
             coef, res, R2 = regressXY(x, y, fit_intercept = False)
 
-            info_sub["sn"] = T.participant_id[sub]
-            info_sub["X"] = x
-            info_sub["Y"]    = y
-            info_sub["res"]  = res
-            info_sub["coef"] = coef * np.ones([len(info_sub), 1])
-            info_sub["R2"] = R2 * np.ones([len(info_sub), 1])
-            info_sub['label'] = (ilabel+1) * np.ones([len(info_sub), 1])
+            info_sub["sn"]    = T.participant_id[sub]
+            info_sub["X"]     = x # X is either the cortical data or the predicted cerebellar activation
+            info_sub["Y"]     = y
+            info_sub["res"]   = res
+            info_sub["coef"]  = coef * np.ones([len(info_sub), 1])
+            info_sub["R2"]    = R2 * np.ones([len(info_sub), 1])
+            info_sub["cortex"] = cortex * len(info_sub)
+            info_sub['#region'] = (ilabel+1) * np.ones([len(info_sub), 1])
 
             summary_list.append(info_sub)
         
     summary_df = pd.concat(summary_list, axis = 0)
     return summary_df
+
+def plot_cerebellum():
+    pass
+def plot_cortex():
+    pass

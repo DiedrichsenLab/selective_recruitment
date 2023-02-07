@@ -370,9 +370,7 @@ def regressXY(X, Y, subtract_mean = False):
     return coef, residual, R2
 
 # 6. getting data into a dataframe
-def get_summary(dataset_name = "WMFS",
-                cerebellum = 'Buckner7', 
-                cortex = 'Icosahedron-1002.32k', 
+def get_summary(dataset_name = "WMFS", 
                 agg_whole = False):
     """
     prepares a dataframe for plotting the scatterplot
@@ -400,17 +398,15 @@ def get_summary(dataset_name = "WMFS",
         label_cortex = mask_cortex
     else:
 
-        label_cereb = atlas_dir + '/tpl-SUIT' + f'/atl-{cerebellum}_space-SUIT_dseg.nii'
+        label_cereb = '/cifs/diedrichsen/data/Cerebellum/Language/Fedorenko/loc_maps/map_langloc_S-N_t_cereb.nii'
 
-        label_cortex = []
-        for hemi in ['L', 'R']:
-            label_cortex.append(atlas_dir + '/tpl-fs32k' + f'/{cortex}.{hemi}.label.gii')
+        label_cortex = '/cifs/diedrichsen/data/Cerebellum/Language/Fedorenko/loc_maps/map_langloc_S-N_t_cort.nii'
 
 
     # getting data for all the participants in SUIT space
-    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-s2', type='CondAll', fields=None)
+    cdat, info = Dat.get_data(space='SUIT3', ses_id='ses-rsvplanguage', type='CondHalf', fields=None)
     # getting data for all the participants in fs32k space
-    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-s2', type='CondAll', fields=None)
+    ccdat, info = Dat.get_data(space='fs32k', ses_id='ses-rsvplanguage', type='CondHalf', fields=None)
 
     # loop through subjects and create a dataframe
     summary_list = []
@@ -423,7 +419,7 @@ def get_summary(dataset_name = "WMFS",
 
         # pass on the data with the atlas object to the aggregating function
         cifti_Y = agg_data_parcel(this_data_cereb, info, atlas_cereb, label_cereb, unite_hemi=False)
-        cifti_X = agg_data_parcel(this_data_cortex, info, atlas_cortex, label_cortex, unite_hemi=True)
+        cifti_X = agg_data_parcel(this_data_cortex, info, atlas_cortex, label_cortex, unite_hemi=False)
 
         # get data per parcel
         X = cifti_X.get_fdata()
@@ -468,10 +464,10 @@ if __name__ == "__main__":
     """
     Getting the summary dataframe for the scatterplot over whole structures
     """
-    df = get_summary(dataset_name = "MDTB", agg_whole=True)
-    # save the dataframe for later
-    filepath = os.path.join(language_dir, 'MDTB', 'whole_ses-s2.tsv')
-    df.to_csv(filepath, index = False, sep='\t')
+    # df = get_summary(dataset_name = "MDTB", agg_whole=True)
+    # # save the dataframe for later
+    # filepath = os.path.join(language_dir, 'MDTB', 'whole_ses-s2.tsv')
+    # df.to_csv(filepath, index = False, sep='\t')
 
     """
     Make regions of interest from MDTB
@@ -481,9 +477,9 @@ if __name__ == "__main__":
     """
     Getting the summary dataframe for the scatterplot in an ROI-wise manner
     """
-    # df = get_summary(dataset_name = "WMFS", agg_whole=False, cerebellum="Verbal2Back", cortex="Verbal2Back.32k")
-    # # save the dataframe for later
-    # filepath = os.path.join(base_dir, 'WMFS', 'sc_df_VWM_ses-02.tsv')
-    # df.to_csv(filepath, index = False, sep='\t')
+    df = get_summary(dataset_name = "IBC", agg_whole=False)
+    # save the dataframe for later
+    filepath = os.path.join(language_dir, 'IBC', 'roi_ses-s2.tsv')
+    df.to_csv(filepath, index = False, sep='\t')
 
 

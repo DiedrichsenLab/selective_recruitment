@@ -9,8 +9,6 @@ Author: Ladan Shahshahani
 # import packages
 from pyexpat import model
 import sys
-sys.path.append('../Functional_Fusion') 
-sys.path.append('../cortico-cereb_connectivity') 
 
 import numpy as np
 import pandas as pd
@@ -18,12 +16,12 @@ import deepdish as dd
 from pathlib import Path
 
 # modules from functional fusion
-from atlas_map import *
-from dataset import *
-from matrix import indicator
+import Functional_Fusion.atlas_map as am
+import Functional_Fusion.dataset as ds
+import Functional_Fusion.matrix as matrix
 
 # modules from connectivity
-import prepare_data as cprep
+import cortico_cereb_connectivity.prepare_data as cprep
 
 import os
 import nibabel as nb
@@ -126,6 +124,33 @@ def regressXY(X, Y, fit_intercept = False):
     R2 = 1 - rss/tss
 
     return model[1], residual, R2
+
+def run_regress
+        # looping over labels and doing regression for each corresponding label
+        for ilabel in range(Y.shape[1]):
+            info_sub = info.copy()
+            info_sub = info_sub.loc[info.half == 1]
+            print(f"- subject {T.participant_id[sub]} label {ilabel+1}")
+            x = X[:, ilabel]
+            y = Y[:, ilabel]
+
+            coef, res, R2 = regressXY(x, y, fit_intercept = False)
+
+            info_sub["sn"]    = T.participant_id[sub]
+            info_sub["X"]     = x # X is either the cortical data or the predicted cerebellar activation
+            info_sub["Y"]     = y
+            info_sub["res"]   = res
+            info_sub["coef"]  = coef * np.ones([len(info_sub), 1])
+            info_sub["R2"]    = R2 * np.ones([len(info_sub), 1])
+            info_sub["cortex"] = cortex * len(info_sub)
+            info_sub['#region'] = (ilabel+1) * np.ones([len(info_sub), 1])
+
+            summary_list.append(info_sub)
+        
+    summary_df = pd.concat(summary_list, axis = 0)
+
+
+
 
 # getting data into a dataframe
 def get_summary(outpath = None,

@@ -13,6 +13,7 @@ import sys
 import numpy as np
 import pandas as pd
 import deepdish as dd
+import seaborn as sb
 from pathlib import Path
 
 # modules from functional fusion
@@ -53,6 +54,34 @@ def get_smooth_matrix(atlas, fwhm = 3):
     smooth_mat = smooth_mat /np.sum(smooth_mat, axis = 1);   
 
     return smooth_mat
+
+def calc_mean(data,info,
+                partition='run',
+                condition='reg_id',
+                reorder=False):
+    n_subj = data.shape[0]
+    cond=np.unique(info.reg_id)
+    n_cond = len(cond)
+
+    # For this purpose, ignore nan voxels
+    data = np.nan_to_num(data,copy=False)
+    
+    mean_d = data.mean(axis=2)
+    Z = matrix.indicator(info.reg_id)
+    mean_d = mean_d @ np.linalg.pinv(Z).T
+    
+    part = np.unique(info[partition])
+    inf=info[info[partition]==part[0]].copy()
+    if reorder:
+        inf=inf.sort_values(reorder)
+        ind=inf.index.to_numpy()
+        inf=inf.reset_index()
+        mean_d = mean_d[:,ind]
+    
+    return mean_d,inf
+
+
+
 
 # use connectivity model to predict cerebellar activation
 def predict_cerebellum(weights, scale, X, atlas, info, fwhm = 0):
@@ -125,32 +154,28 @@ def regressXY(X, Y, fit_intercept = False):
 
     return model[1], residual, R2
 
-def run_regress
-        # looping over labels and doing regression for each corresponding label
-        for ilabel in range(Y.shape[1]):
-            info_sub = info.copy()
-            info_sub = info_sub.loc[info.half == 1]
-            print(f"- subject {T.participant_id[sub]} label {ilabel+1}")
-            x = X[:, ilabel]
-            y = Y[:, ilabel]
+def run_regress(X,Y,info,fit_intercept = False):
+    # Looping over subject and running the regression for 
+    # Each of them. 
+    n_subj,n_cond = X.shape
+    summary_list = [] 
+    for i in range(n_subj):
+        info_sub = info.copy()
+        x = X[i,:]
+        y = Y[i,:]
 
-            coef, res, R2 = regressXY(x, y, fit_intercept = False)
+        coef, res, R2 = regressXY(x, y, fit_intercept = fit_intercept)
+        info_sub["sn"]    = i * np.ones([len(info_sub), 1])
+        info_sub["X"]     = x # X is either the cortical data or the predicted cerebellar activation
+        info_sub["Y"]     = y
+        info_sub["res"]   = res
+        info_sub["coef"]  = coef * np.ones([len(info_sub), 1])
+        info_sub["R2"]    = R2 * np.ones([len(info_sub), 1])
 
-            info_sub["sn"]    = T.participant_id[sub]
-            info_sub["X"]     = x # X is either the cortical data or the predicted cerebellar activation
-            info_sub["Y"]     = y
-            info_sub["res"]   = res
-            info_sub["coef"]  = coef * np.ones([len(info_sub), 1])
-            info_sub["R2"]    = R2 * np.ones([len(info_sub), 1])
-            info_sub["cortex"] = cortex * len(info_sub)
-            info_sub['#region'] = (ilabel+1) * np.ones([len(info_sub), 1])
-
-            summary_list.append(info_sub)
+        summary_list.append(info_sub)
         
     summary_df = pd.concat(summary_list, axis = 0)
-
-
-
+    return summary_df
 
 # getting data into a dataframe
 def get_summary(outpath = None,
@@ -278,6 +303,22 @@ def get_summary(outpath = None,
         
     summary_df = pd.concat(summary_list, axis = 0)
     return summary_df
+
+def scatter_text(x, y, text_column):
+    """Scatter plot with country codes on the x y coordinates
+    """
+    # Create the scatter plot
+    p1 = sb.scatterplot(x=x, y=y, size = 8, legend=False)
+    # Add text besides each point
+    xrange=p1.get_xlim()
+    gap = (xrange[1]-xrange[0])*0.01
+    for line in range(0,x.shape[0]):
+         p1.text(x[line]+gap, y[line], 
+                 text_column[line], horizontalalignment='left', 
+                 size='medium', color='black', weight='semibold')
+    # Set title and axis labels
+    return p1
+
 
 def plot_cerebellum():
     pass

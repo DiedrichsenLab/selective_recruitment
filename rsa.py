@@ -38,9 +38,7 @@ def calc_rsa(data,info,partition='run',center=False,reorder=False):
     else:
         X = None
     
-    mean_d = data.mean(axis=2)
     Z = pcm.matrix.indicator(info.reg_id)
-    mean_d = mean_d @ np.linalg.pinv(Z).T
     
     for i in range(n_subj):
         G[i],_=pcm.est_G_crossval(data[i],Z,info[partition],X)
@@ -52,8 +50,7 @@ def calc_rsa(data,info,partition='run',center=False,reorder=False):
         ind=Ginf.index.to_numpy()
         G=G[:,ind,:][:,:,ind]
         Ginf=Ginf.reset_index()
-        mean_d = mean_d[:,ind]
     
-    return G,Ginf,mean_d
+    return G,Ginf
 
 

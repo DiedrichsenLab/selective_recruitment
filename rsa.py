@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-The functions used to do selective recruitment analysis
-
-Created on 12/09/2022 at 5:25 PM
-Author: Ladan Shahshahani
+The functions used to do RSA component of the selective recruitment analysis
 """
 # import packages
 import sys
@@ -24,6 +21,19 @@ import PcmPy as pcm
 
 
 def calc_rsa(data,info,partition='run',center=False,reorder=False):
+    """ Calculates crossvalidated second moment matrices across a number  
+    of subjects. Option to center (voxel-mean-subtract) and to reorder the conditions 
+    Args:
+        data (ndarray): nsubj x nobs x nvox tensor of data 
+        info (_type_): nobs data frame with information 
+        partition (str): Column name of partition indicator. Defaults to 'run'.
+        center (bool): Subtract mean of each voxel? Defaults to False.
+        reorder (False or List): If str of list of str, reorders conditions based on those columns .
+
+    Returns:
+        G (ndarray): nsubj x ncond x ncond tensor of second moments
+        Ginf (pd.DataFrame): information on different conditions 
+    """
     n_subj = data.shape[0]
     cond=np.unique(info.reg_id)
     n_cond = len(cond)
@@ -53,4 +63,6 @@ def calc_rsa(data,info,partition='run',center=False,reorder=False):
     
     return G,Ginf
 
+def test_rsa_difference(G1,G2): 
+    pass 
 

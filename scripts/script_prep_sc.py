@@ -15,23 +15,23 @@ sys.path.append('../selective_recruitment')
 sys.path.append('..')
 import nibabel as nb
 import Functional_Fusion.dataset as fdata # from functional fusion module
-import prepare_data as prep
+import data as cdata # from connectivity 
 import select_recruite as sr
 
 
 # run this function to make sure that you have saved data tensors
 def prep_tensor(dataset_name = "WMFS", ses_id = 'ses-02'):
-   prep.save_data_tensor(dataset = dataset_name,
+   cdata.save_data_tensor(dataset = dataset_name,
                          atlas='SUIT3',
                          ses_id=ses_id,
                          type="CondHalf")
-   prep.save_data_tensor(dataset = dataset_name,
+   cdata.save_data_tensor(dataset = dataset_name,
                          atlas='fs32k',
                          ses_id=ses_id,
                          type="CondHalf")
    return
 
-def prep_sc_whole(outpath = prep.conn_dir, 
+def prep_sc_whole(outpath = cdata.conn_dir, 
                 dataset_name = "WMFS", 
                 cerebellum = "SUIT3", 
                 cortex = "tpl-fs32k_mask", 
@@ -53,7 +53,7 @@ def prep_sc_whole(outpath = prep.conn_dir,
     df.to_csv(filepath, index = False, sep='\t')
     return
 
-def prep_sc_roi(outpath = prep.conn_dir, 
+def prep_sc_roi(outpath = cdata.conn_dir, 
                 dataset_name = "WMFS", 
                 cerebellum = "Verbal2Back", 
                 cortex = "Verbal2Back.32k", 
@@ -76,7 +76,7 @@ def prep_sc_roi(outpath = prep.conn_dir,
     return
 
 # 
-def prep_sc_conn(outpath = prep.conn_dir, 
+def prep_sc_conn(outpath = cdata.conn_dir, 
                  dataset_name = "WMFS", 
                  conn_dataset = "MDTB", 
                  conn_ses_id = "ses-s1", 
@@ -112,21 +112,21 @@ if __name__ == "__main__":
     """
     For WMFS
     """
-    # prep_sc_whole(outpath = prep.conn_dir, 
+    # prep_sc_whole(outpath = cdata.conn_dir, 
     #               dataset_name = "WMFS", 
     #               ses_id = 'ses-02')
 
-    # prep_sc_whole(outpath = prep.conn_dir, 
+    # prep_sc_whole(outpath = cdata.conn_dir, 
     #               dataset_name = "WMFS", 
     #               ses_id = 'ses-01')
 
-    # prep_sc_roi(outpath = prep.conn_dir, 
+    # prep_sc_roi(outpath = cdata.conn_dir, 
     #             dataset_name = "WMFS", 
     #             cerebellum = "Verbal2Back", 
     #             cortex = "Verbal2Back.32k", 
     #             ses_id = 'ses-02')
 
-    # prep_sc_conn(outpath = prep.conn_dir, 
+    # prep_sc_conn(outpath = cdata.conn_dir, 
     #              dataset_name = "WMFS", 
     #              conn_dataset = "MDTB", 
     #              conn_ses_id = "ses-s1", 
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     #              cerebellum = "Verbal2Back", 
     #              log_alpha = 8)
 
-    # prep_sc_conn(outpath = prep.conn_dir, 
+    # prep_sc_conn(outpath = cdata.conn_dir, 
     #              dataset_name = "WMFS", 
     #              conn_dataset = "MDTB", 
     #              conn_ses_id = "ses-s1", 
@@ -145,17 +145,17 @@ if __name__ == "__main__":
     """
     For Demand
     """
-    # prep_sc_whole(outpath = prep.conn_dir, 
+    # prep_sc_whole(outpath = cdata.conn_dir, 
     #               dataset_name = "Demand", 
     #               ses_id = 'ses-01')
 
-    # prep_sc_roi(outpath = prep.conn_dir, 
+    # prep_sc_roi(outpath = cdata.conn_dir, 
     #             dataset_name = "Demand", 
     #             cerebellum = "Verbal2Back", 
     #             cortex = "Verbal2Back.32k", 
     #             ses_id = 'ses-01')
 
-    prep_sc_conn(outpath = prep.conn_dir, 
+    prep_sc_conn(outpath = cdata.conn_dir, 
                  dataset_name = "Demand", 
                  conn_dataset = "MDTB", 
                  conn_ses_id = "ses-s1", 

@@ -8,21 +8,20 @@ Author: Ladan Shahshahani
 """
 # import packages
 import sys
-sys.path.append('../Functional_Fusion') 
-sys.path.append('../cortico-cereb_connectivity') 
 
 import numpy as np
 import pandas as pd
 import deepdish as dd
+import seaborn as sb
 from pathlib import Path
 
 # modules from functional fusion
-from Functional_Fusion import atlas_map as am
-from Functional_Fusion import dataset as fdata
-from Functional_Fusion.matrix import indicator
+import Functional_Fusion.atlas_map as am
+import Functional_Fusion.dataset as ds
+import Functional_Fusion.matrix as matrix
 
 # modules from connectivity
-from cortico_cereb_connectivity import data as cdata
+import cortico_cereb_connectivity.prepare_data as cprep
 
 import os
 import nibabel as nb
@@ -64,6 +63,34 @@ def get_smooth_matrix(atlas, fwhm = 3):
     smooth_mat = smooth_mat /np.sum(smooth_mat, axis = 1);   
 
     return smooth_mat
+
+def calc_mean(data,info,
+                partition='run',
+                condition='reg_id',
+                reorder=False):
+    n_subj = data.shape[0]
+    cond=np.unique(info.reg_id)
+    n_cond = len(cond)
+
+    # For this purpose, ignore nan voxels
+    data = np.nan_to_num(data,copy=False)
+    
+    mean_d = data.mean(axis=2)
+    Z = matrix.indicator(info.reg_id)
+    mean_d = mean_d @ np.linalg.pinv(Z).T
+    
+    part = np.unique(info[partition])
+    inf=info[info[partition]==part[0]].copy()
+    if reorder:
+        inf=inf.sort_values(reorder)
+        ind=inf.index.to_numpy()
+        inf=inf.reset_index()
+        mean_d = mean_d[:,ind]
+    
+    return mean_d,inf
+
+
+
 
 # use connectivity model to predict cerebellar activation
 def predict_cerebellum(weights, scale, X, atlas, info, fwhm = 0):
@@ -135,6 +162,29 @@ def regressXY(X, Y, fit_intercept = False):
     R2 = 1 - rss/tss
 
     return model[1], residual, R2
+
+def run_regress(X,Y,info,fit_intercept = False):
+    # Looping over subject and running the regression for 
+    # Each of them. 
+    n_subj,n_cond = X.shape
+    summary_list = [] 
+    for i in range(n_subj):
+        info_sub = info.copy()
+        x = X[i,:]
+        y = Y[i,:]
+
+        coef, res, R2 = regressXY(x, y, fit_intercept = fit_intercept)
+        info_sub["sn"]    = i * np.ones([len(info_sub), 1])
+        info_sub["X"]     = x # X is either the cortical data or the predicted cerebellar activation
+        info_sub["Y"]     = y
+        info_sub["res"]   = res
+        info_sub["coef"]  = coef * np.ones([len(info_sub), 1])
+        info_sub["R2"]    = R2 * np.ones([len(info_sub), 1])
+
+        summary_list.append(info_sub)
+        
+    summary_df = pd.concat(summary_list, axis = 0)
+    return summary_df
 
 # getting data into a dataframe
 def get_summary(outpath = None,

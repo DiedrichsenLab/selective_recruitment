@@ -12,7 +12,7 @@ import nibabel as nb
 import Functional_Fusion.dataset as fdata 
 import Functional_Fusion.atlas_map as am
 import cortico_cereb_connectivity.data as cdata 
-import selective_recruitment.rec_ana as ra
+import selective_recruitment.recruite_ana as ra
 
 
 # set base directory of the functional fusion 
@@ -22,7 +22,7 @@ if not Path(base_dir).exists():
 atlas_dir = base_dir + '/Atlases'
 
 
-# 1. run this function to make sure that you have saved data tensors
+# run this function to make sure that you have saved data tensors
 def prep_tensor(dataset_name = "WMFS", ses_id = 'ses-02'):
    cdata.save_data_tensor(dataset = dataset_name,
                          atlas='SUIT3',

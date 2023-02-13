@@ -64,7 +64,7 @@ def annotate(dataframe, text_size = 'small', text_weight = 'regular', labels = "
     adjust_text(texts) # make sure you have installed adjust_text
 
 # plotting:
-def make_plot(dataframe, hue = "phase", style = "recall", label = "load", height = 4, aspect = 1):
+def make_scatterplot(dataframe, hue = "phase", style = "recall", label = "load", height = 4, aspect = 1):
     """
     make scatterplot
     uses FacetGrid 

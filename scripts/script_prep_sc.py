@@ -5,7 +5,7 @@ script to prepare dataframe for scatterplots
 import os
 import numpy as np
 import deepdish as dd
-import pathlib as Path
+from pathlib import Path
 import pandas as pd
 import re
 import sys
@@ -155,10 +155,41 @@ if __name__ == "__main__":
     #             cortex = "Verbal2Back.32k", 
     #             ses_id = 'ses-01')
 
-    prep_sc_conn(outpath = prep.conn_dir, 
-                 dataset_name = "Demand", 
-                 conn_dataset = "MDTB", 
-                 conn_ses_id = "ses-s1", 
-                 ses_id = 'ses-01', 
-                 cerebellum = "Verbal2Back", 
-                 log_alpha = 8)
+    # prep_sc_conn(outpath = prep.conn_dir, 
+    #              dataset_name = "Demand", 
+    #              conn_dataset = "MDTB", 
+    #              conn_ses_id = "ses-s1", 
+    #              ses_id = 'ses-01', 
+    #              cerebellum = "Verbal2Back", 
+    #              log_alpha = 8)
+
+    """
+    For Language
+    """
+    
+    save_dir='/cifs/diedrichsen/data/Cerebellum/Language/IBC'
+    base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
+    conn_dir = '/cifs/diedrichsen/data/Cerebellum/connectivity'
+    if not Path(base_dir).exists():
+        base_dir = '/cifs/diedrichsen/data/FunctionalFusion'
+    atlas_dir = base_dir + '/Atlases'
+
+
+    # prep_tensor(dataset_name = "IBC", ses_id = "ses-rsvplanguage")
+    # prep_sc_whole(outpath = prep.conn_dir, 
+    #               dataset_name = "IBC", 
+    #               ses_id = 'ses-rsvplanguage')
+
+    prep_sc_roi(outpath = prep.conn_dir, 
+                dataset_name = "IBC", 
+                cerebellum = "VerbGen", 
+                cortex = "VerbGen.32k", 
+                ses_id = 'ses-rsvplanguage')
+
+    # prep_sc_conn(outpath = prep.conn_dir, 
+    #              dataset_name = "IBC", 
+    #              conn_dataset = "MDTB", 
+    #              conn_ses_id = "ses-s1", 
+    #              ses_id = 'ses-rsvplanguage', 
+    #              cerebellum = "WordRead", 
+    #              log_alpha = 8)

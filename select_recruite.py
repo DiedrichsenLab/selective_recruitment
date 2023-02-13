@@ -32,7 +32,7 @@ import nitools as nt
 # set base directory of the functional fusion 
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
 if not Path(base_dir).exists():
-    base_dir = '/srv/diedrichsen/data/FunctionalFusion'
+    base_dir = '/cifs/diedrichsen/data/FunctionalFusion'
 atlas_dir = base_dir + '/Atlases'
 
 # Get smoothing matrix, can be used to smooth the weights (for connectivity)
@@ -153,6 +153,7 @@ def get_summary(outpath = None,
 
     # get list of subjects:
     T = Data.get_participants()
+    T=T.reset_index()
 
     if save_tensor:
         # get data tensor for SUIT3
@@ -203,6 +204,7 @@ def get_summary(outpath = None,
     # loop through subjects and create a dataframe
     summary_list = []
     for sub in range(len(T.participant_id)):
+        print(f'got {sub}')
         # get data for the current subject
         this_data_cereb = cdat[sub, :, :]
         this_data_cortex = ccdat[sub, :, :]

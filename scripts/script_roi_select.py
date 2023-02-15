@@ -10,7 +10,7 @@ Author: Ladan Shahshahani
 import sys
 sys.path.append('../Functional_Fusion') 
 sys.path.append('../cortico-cereb_connectivity') 
-sys.path.append('..')
+sys.path.append('../selective_recruitment')
 
 import numpy as np
 import pandas as pd
@@ -19,81 +19,12 @@ from pathlib import Path
 # modules from functional fusion
 from atlas_map import *
 from dataset import *
+from select_recruite import atlas_dir, base_dir, make_roi_cerebellum, make_roi_cortex
 
 #
 import os
 import nibabel as nb
 import nitools as nt
-
-
-def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", contrast = "Verbal2Back"):
-    """
-    creates label nifti for roi cerebellum
-    Args:
-    cifti_img (nb.Cifti2) - cifti image of the extracted data
-    info (pd.DataFrame) - pandas dataframe representing info for the dataset
-    threshold (int) - percentile value used in thresholding
-    contrast (str) - name of the contrast
-    Returns:
-    nifti_img (nb.nifti) - nifti of the label created
-    """
-    # get suit data
-    data = cifti_img.get_fdata()
-    # get the row index corresponding to the contrast
-    info_con = info.loc[info.cond_name == contrast]
-    # get the map for the contrast of interest
-    con_map  = data[info_con.cond_num.values -1, :]
-
-    # get threshold value (ignoring nans)
-    percentile_value = np.nanpercentile(con_map, q=threshold)
-
-    # apply threshold
-    thresh_data = con_map > percentile_value
-    # convert 0 to nan
-    thresh_data[thresh_data != False] = np.nan
-
-    # create an instance of the atlas (will be used to convert data to nifti)
-    atlas, a_info = am.get_atlas(atlas_space,atlas_dir)
-    nifti_img = atlas.data_to_nifti(1*thresh_data)
-    return nifti_img
-
-
-def make_roi_cortex(cifti_img, info, threshold, contrast = "Verbal2Back"):
-    """
-    creates label giftis for left and right hemisphere of the cortex
-    Args:
-    cifti_img (nb.Cifti2) - cifti image of the extracted data
-    info (pd.DataFrame) - pandas dataframe representing info for the dataset
-    threshold (int) - percentile value used in thresholding
-    contrast (str) - name of the contrast
-    Returns:
-    gifti_img (list) - list of label giftis for left and right hemispheres
-    """
-    # get data for left and right hemisphere
-    data_list = nt.surf_from_cifti(cifti_img)
-
-    # threshold and create label
-    gifti_img = []
-    for i, name in zip([0, 1], ['CortexLeft', 'CortexRight']):
-        # get data for the hemisphere
-        data = data_list[i]
-
-        # get the contrast map
-        # get the row index corresponding to the contrast
-        info_con = info.loc[info.cond_name == contrast]
-        # get the map for the contrast of interest
-        con_map  = data[info_con.cond_num.values -1, :]
-
-        # get threshold value (ignoring nans)
-        percentile_value = np.nanpercentile(con_map, q=threshold)
-
-        # apply threshold
-        thresh_data = con_map > percentile_value
-        # convert 0 to nan
-        thresh_data[thresh_data != False] = np.nan
-        # create label gifti
-        gifti_img.append(nt.make_label_gifti(1*thresh_data.T, anatomical_struct=name))
-    return gifti_img
 
 
 def make_roi_label(dataset_name = "MDTB", 
@@ -132,3 +63,6 @@ def make_roi_label(dataset_name = "MDTB",
         nb.save(roi_gifti[i], Data.atlas_dir + '/tpl-fs32k' + f'/{contrast}.32k.{h}.label.gii')
 
     return
+
+if __name__ == "__main__":
+    make_roi_label()

@@ -63,15 +63,25 @@ def calc_rsa(data,info,partition='run',center=False,reorder=False):
     
     return G,Ginf
 
-def cossim(G1,G2):
+def cossim(G1,G2,axis = None):
     """Calculates the cosine similarity between two matrices 
 
     Args:
-        G1 (ndarray): matrix  1
+        G1 (ndarray): matrix 1
         G2 (ndarray): matrix 2
     """
-    return np.sum(G1*G2)/np.sqrt(np.sum(G1*G1)*np.sum(G2*G2))
-
+    if axis is None: 
+        c = np.sum(G1*G2)
+        a = np.sum(G1*G1)
+        b = np.sum(G2*G2)
+        return c/np.sqrt(a*b)
+    elif axis == 1:
+        c = G1@G2.T
+        a = np.sum(G1*G1,axis=1)
+        b = np.sum(G2*G2,axis=1)
+        return c/np.sqrt(np.outer(a,b))
+    else:
+        raise(NameError('axis must be 1 or none'))
 
 def sim_difference_mean(G1,G2,sim_measure=cossim):
     """ Does a correspondence analysis to check if there 
@@ -99,29 +109,28 @@ def sim_difference_mean(G1,G2,sim_measure=cossim):
         result[i,3]=sim_measure(G2[i],np.mean(G1[indx!=i],axis=0))
     return (result[:,:2]+result[:,2:])/2
 
-def sim_difference(G1,G2,sim_measure=cossim):
-    """ Does a correspondence analysis to check if there 
-    are systematic difference between two sets of vectors / matrices or tensors
-    For each subject it calculates the similarity measure between G1[i] and the mean of G1 and G2 (excluding subject i)
-    This is averaged with the same similarity measure, now reversing the role of G1 and G2
-    Args:
+def mmd_unbiased_paired(G1,G2,sim_measure=cossim):
+    """ Calculates the unbiased Maximum mean divergence2
+        for a paired group of samples (m=n)
         G1 (ndarray): nsubj x ... tensor of data 1 
-        G2 (ndarray): nsubj x ... tensor of dayta 2
-        sim_measure (fcn or str): Function 
+        G2 (ndarray): nsubj x ... tensor of data 2
+        sim_measure (fcn or str): Kernel function 
     Returns: 
-        results (ndarray): nsubj x 2. First column is similarity with itself
-                            second column is with the opposite. 
-                            test results[:,0]>results[:,1]
+        mmd2 (ndarray): 
+
     """ 
     if G1.shape !=G2.shape:
         raise(NameError('Tensors G1 and G2 need to have the same size'))
     nsubj = G1.shape[0]
-    result = np.zeros((nsubj,nsubj))
-    indx = np.arange(nsubj)
-    for i in indx:
-        result[i,0]=sim_measure(G1[i],np.mean(G1[indx!=i],axis=0))
-        result[i,1]=sim_measure(G1[i],np.mean(G2[indx!=i],axis=0))
-        result[i,2]=sim_measure(G2[i],np.mean(G2[indx!=i],axis=0))
-        result[i,3]=sim_measure(G2[i],np.mean(G1[indx!=i],axis=0))
-    return (result[:,:2]+result[:,2:])/2
+    G1 = G1.reshape(nsubj,-1)
+    G2 = G2.reshape(nsubj,-1)
 
+    C11 = sim_measure(G1,G1,axis=1)
+    C12 = sim_measure(G1,G2,axis=1)
+    C22 = sim_measure(G2,G2,axis=1)
+    k11 = C11.sum() - np.trace(C11) 
+    k22 = C22.sum() - np.trace(C22)
+    k12 = C12.sum() - np.trace(C12)
+
+    mmd2 = 1/(nsubj * (nsubj-1)) * (k11 + k22 - 2*k12)
+    return mmd2

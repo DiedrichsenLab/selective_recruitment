@@ -63,6 +63,65 @@ def calc_rsa(data,info,partition='run',center=False,reorder=False):
     
     return G,Ginf
 
-def test_rsa_difference(G1,G2): 
-    pass 
+def cossim(G1,G2):
+    """Calculates the cosine similarity between two matrices 
+
+    Args:
+        G1 (ndarray): matrix  1
+        G2 (ndarray): matrix 2
+    """
+    return np.sum(G1*G2)/np.sqrt(np.sum(G1*G1)*np.sum(G2*G2))
+
+
+def sim_difference_mean(G1,G2,sim_measure=cossim):
+    """ Does a correspondence analysis to check if there 
+    are systematic difference between two sets of vectors / matrices or tensors
+    For each subject it calculates the similarity measure between G1[i] and the mean of G1 and G2 (excluding subject i)
+    This is averaged with the same similarity measure, now reversing the role of G1 and G2
+    Args:
+        G1 (ndarray): nsubj x ... tensor of data 1 
+        G2 (ndarray): nsubj x ... tensor of dayta 2
+        sim_measure (fcn or str): Function 
+    Returns: 
+        results (ndarray): nsubj x 2. First column is similarity with itself
+                            second column is with the opposite. 
+                            test results[:,0]>results[:,1]
+    """ 
+    if G1.shape !=G2.shape:
+        raise(NameError('Tensors G1 and G2 need to have the same size'))
+    nsubj = G1.shape[0]
+    result = np.zeros((nsubj,4))
+    indx = np.arange(nsubj)
+    for i in indx:
+        result[i,0]=sim_measure(G1[i],np.mean(G1[indx!=i],axis=0))
+        result[i,1]=sim_measure(G1[i],np.mean(G2[indx!=i],axis=0))
+        result[i,2]=sim_measure(G2[i],np.mean(G2[indx!=i],axis=0))
+        result[i,3]=sim_measure(G2[i],np.mean(G1[indx!=i],axis=0))
+    return (result[:,:2]+result[:,2:])/2
+
+def sim_difference(G1,G2,sim_measure=cossim):
+    """ Does a correspondence analysis to check if there 
+    are systematic difference between two sets of vectors / matrices or tensors
+    For each subject it calculates the similarity measure between G1[i] and the mean of G1 and G2 (excluding subject i)
+    This is averaged with the same similarity measure, now reversing the role of G1 and G2
+    Args:
+        G1 (ndarray): nsubj x ... tensor of data 1 
+        G2 (ndarray): nsubj x ... tensor of dayta 2
+        sim_measure (fcn or str): Function 
+    Returns: 
+        results (ndarray): nsubj x 2. First column is similarity with itself
+                            second column is with the opposite. 
+                            test results[:,0]>results[:,1]
+    """ 
+    if G1.shape !=G2.shape:
+        raise(NameError('Tensors G1 and G2 need to have the same size'))
+    nsubj = G1.shape[0]
+    result = np.zeros((nsubj,nsubj))
+    indx = np.arange(nsubj)
+    for i in indx:
+        result[i,0]=sim_measure(G1[i],np.mean(G1[indx!=i],axis=0))
+        result[i,1]=sim_measure(G1[i],np.mean(G2[indx!=i],axis=0))
+        result[i,2]=sim_measure(G2[i],np.mean(G2[indx!=i],axis=0))
+        result[i,3]=sim_measure(G2[i],np.mean(G1[indx!=i],axis=0))
+    return (result[:,:2]+result[:,2:])/2
 

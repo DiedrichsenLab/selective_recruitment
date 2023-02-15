@@ -16,6 +16,7 @@ import nibabel as nb
 import nitools as nt
 import PcmPy as pcm
 import seaborn as sb
+import scipy.stats as ss
 
 # modules from functional fusion
 import Functional_Fusion.atlas_map as am
@@ -24,7 +25,7 @@ import matplotlib.pyplot as plt
 # modules from connectivity
 import cortico_cereb_connectivity.prepare_data as cprep
 import selective_recruitment.rsa as rsa
-import selective_recruitment.select_recruite as sr
+import selective_recruitment.recruite_ana as sr
 
 
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
@@ -39,19 +40,59 @@ def cereb_cortical_rsa():
                                                 atlas='MNISymC3',
                                                 sess='ses-02',
                                                 type='CondRun')
-    G1,Ginf = rsa.calc_rsa(DCereb,info,center=False,reorder=['phase','recall'])
+    G1,Ginf = rsa.calc_rsa(DCereb,info,center=True,reorder=['phase','recall'])
     
     DCortex, info, dataset = ds.get_dataset(base_dir,
                                                 'WMFS',
                                                 atlas='fs32k',
                                                 sess='ses-02',
                                                 type='CondRun')
-    G2,Ginf  = rsa.calc_rsa(DCortex,info,center=False,reorder=['phase','recall'])
+    G2,Ginf  = rsa.calc_rsa(DCortex,info,center=True,reorder=['phase','recall'])
     
     plt.figure(figsize=(10,10))
     pcm.vis.plot_Gs(G1)
     plt.figure(figsize=(10,10))
     pcm.vis.plot_Gs(G2)
+
+    d1 = rsa.sim_difference_mean(G1,G2)
+    res1 = ss.ttest_rel(d1[:,0], d1[:,1])
+    print(res1)
+    pass
+
+
+def test_test_sim_differences_type1():
+    """Test for type I error rate in a case where the 
+    variability of X1 and X2 is different. 
+    """
+    nsubj = 20
+    niter = 10000
+    m1 = np.array([1.0,2,1,2,1,2,3,3,2])
+    m2 = np.array([1.0,2,1,2,1,2,3,3,2])
+    s1 = 1
+    s2 = 1
+    p = np.zeros((niter,))
+    t = np.zeros((niter,))
+    for i in range(niter):
+        X1 = np.random.normal(0,s1,(nsubj,) + m1.shape) + m1
+        X2 = np.random.normal(0,s2,(nsubj,) + m2.shape) + m1
+        d = rsa.sim_difference_mean(X1,X2)
+        d = np.random.normal(0,1,(nsubj,2))
+        t[i],p[i] = ss.ttest_rel(d[:,0], d[:,1],alternative='greater')
+
+
+    plt.subplot(1,2,1)
+    threshold = np.linspace(0.001,0.1,100)
+    type1 = np.zeros(threshold.shape)
+    for i,th in enumerate(threshold):
+        type1[i] = (p<th).sum()/niter
+    plt.plot(threshold,type1,'b.')
+    plt.plot(threshold,threshold,'k')
+    
+    ax = plt.subplot(1,2,2)
+    ss.probplot(t, dist=ss.t, sparams=(nsubj-1,), plot=ax,fit=False)
+    lims = ax.get_xlim()
+    plt.plot(lims,lims,'k:')
+    pass 
 
 
 def individual_analysis():
@@ -89,5 +130,6 @@ def individual_analysis():
 
 
 if __name__=='__main__':
-    individual_analysis()
+    # individual_analysis()
     # cereb_cortical_rsa()
+    test_test_sim_differences_type1()

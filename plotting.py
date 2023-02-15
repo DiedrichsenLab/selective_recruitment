@@ -9,7 +9,6 @@ from adjustText import adjust_text # to adjust the text labels in the plots (pip
 
 from statsmodels.stats.anova import AnovaRM # perform F test
 
-# Functions
 # prepare dataframe for plotting
 def prep_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
     """

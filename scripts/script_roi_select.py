@@ -7,19 +7,15 @@ Created on 12/09/2022 at 5:25 PM
 Author: Ladan Shahshahani
 """
 # import packages
-import sys
-sys.path.append('../Functional_Fusion') 
-sys.path.append('../cortico-cereb_connectivity') 
-sys.path.append('../selective_recruitment')
-
 import numpy as np
 import pandas as pd
 from pathlib import Path
 
 # modules from functional fusion
-from atlas_map import *
-from dataset import *
-from select_recruite import atlas_dir, base_dir, make_roi_cerebellum, make_roi_cortex
+import Functional_Fusion.atlas_map as am
+import Functional_Fusion.dataset as ds
+import selective_recruitment.globals as gl
+import selective_recruitment.recruite_ana as ra
 
 #
 import os
@@ -42,7 +38,7 @@ def make_roi_label(dataset_name = "MDTB",
 
     """
     # get Dataset class for your dataset
-    Data = get_dataset_class(base_dir, dataset=dataset_name)
+    Data = ds.get_dataset_class(gl.base_dir, dataset=dataset_name)
 
     # load data 
     cifti_cerebellum = nb.load(Data.data_dir.format("group") + f"/group_space-SUIT3_{ses_id}_CondAll.dscalar.nii")
@@ -52,8 +48,8 @@ def make_roi_label(dataset_name = "MDTB",
     info_tsv = pd.read_csv(Data.data_dir.format("group") + f"/group_ses-s1_info-CondAll.tsv", sep="\t")
 
     # label files for the cerebellum and cortex
-    roi_nifti = make_roi_cerebellum(cifti_cerebellum, info_tsv, threshold, atlas_space = "SUIT3", contrast = "Verbal2Back")
-    roi_gifti = make_roi_cortex(cifti_cortex, info_tsv, threshold, contrast = "Verbal2Back")
+    roi_nifti = ra.make_roi_cerebellum(cifti_cerebellum, info_tsv, threshold, atlas_space = "SUIT3", contrast = "Verbal2Back")
+    roi_gifti = ra.make_roi_cortex(cifti_cortex, info_tsv, threshold, contrast = "Verbal2Back")
 
     # save the nifti image
     nb.save(roi_nifti, Data.atlas_dir + '/tpl-SUIT' + f'/atl-{contrast}_space-SUIT_dseg.nii')

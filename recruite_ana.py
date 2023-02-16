@@ -134,31 +134,12 @@ def regressXY(X, Y, fit_intercept = False):
         residual (np.ndarray) - residuals 
         R2 (float) - R2 of the regression fit
     """
-
-    # Estimate regression coefficients
-    # X = X.reshape(-1, 1)
-    # Y = Y.reshape(-1, 1)
     if fit_intercept:
         X = np.c_[ np.ones(X.shape[0]), X ]  
-    # coef = np.linalg.inv(X.T@X) @ (X.T@Y)
-    
-    # # matrix-wise simple regression? NOT USED HERE
-    # # c = np.sum(X*Y, axis = 0) / np.sum(X*X, axis = 0)
 
-    # # Calculate residuals
-    # residual = Y - X@coef
-    # print(sum(residual))
-
-    # X = X.reshape(-1, 1)
-    # Y = Y.reshape(-1, 1)
-
-    if len(X.shape)>1:
-        X = X.reshape(X.shape[0], )
-        Y = Y.reshape(Y.shape[0], )
-
-    model = np.polyfit(X, Y, 1)
-    predict = np.poly1d(model)
-    residual = Y - predict(X)
+    coef = np.linalg.pinv(X) @ Y 
+    predict = X @ coef
+    residual = Y - predict
     # print(sum(residual))
 
     # calculate R2 
@@ -166,28 +147,38 @@ def regressXY(X, Y, fit_intercept = False):
     tss = sum((Y - np.mean(Y))**2)
     R2 = 1 - rss/tss
 
-    return model[1], residual, R2
+    return coef[-1], residual, R2
 
 def run_regress(X,Y,info,fit_intercept = False):
-    # Looping over subject and running the regression for 
-    # Each of them. 
-    n_subj = X.shape[0]
+    """ Runs regression analysis for each subject and ROI. 
+    Args:
+        X (ndarray): n_subj x n_cond x n_roi
+        Y (ndarray): n_subj x n_cond x n_roi
+        info (DataFrame): information on conditions 
+        fit_intercept (bool): Use intercept in regression. Default = False
+    Returns:
+        df (DataFrame): resulting data frame
+    """
+    n_subj,n_cond,n_roi = X.shape
 
     summary_list = [] 
     for i in range(n_subj):
-        info_sub = info.copy()
-        x = X[i,:]
-        y = Y[i,:]
+        for r in range(n_roi):
+            info_sub = info.copy()
+            x = X[i,:,r]
+            y = Y[i,:,r]
 
-        coef, res, R2 = regressXY(x, y, fit_intercept = fit_intercept)
-        info_sub["sn"]    = i * np.ones([len(info_sub), 1])
-        info_sub["X"]     = x # X is either the cortical data or the predicted cerebellar activation
-        info_sub["Y"]     = y
-        info_sub["res"]   = res
-        info_sub["coef"]  = coef * np.ones([len(info_sub), 1])
-        info_sub["R2"]    = R2 * np.ones([len(info_sub), 1])
+            coef, res, R2 = regressXY(x, y, fit_intercept = fit_intercept)
+            vec = np.ones((len(info_sub),))
+            info_sub["sn"]    = i * vec
+            info_sub["roi"]   = r * vec
+            info_sub["X"]     = x # X is either the cortical data or the predicted cerebellar activation
+            info_sub["Y"]     = y
+            info_sub["res"]   = res
+            info_sub["coef"]  = coef * vec
+            info_sub["R2"]    = R2 * vec
 
-        summary_list.append(info_sub)
+            summary_list.append(info_sub)
         
     summary_df = pd.concat(summary_list, axis = 0)
     return summary_df

@@ -11,7 +11,7 @@ from collections import defaultdict
 import nibabel as nb
 import Functional_Fusion.dataset as fdata 
 import Functional_Fusion.atlas_map as am
-import cortico_cereb_connectivity.data as cdata 
+# import cortico_cereb_connectivity.data as cdata 
 import selective_recruitment.recruite_ana as ra
 
 
@@ -21,11 +21,11 @@ if not Path(base_dir).exists():
     base_dir = '/srv/diedrichsen/data/FunctionalFusion'
 atlas_dir = base_dir + '/Atlases'
 
+outdir = '/Volumes/diedrichsen_data$/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
-def get_data(tensor, atlas, label, unite_struct = True):
+def agg_data(tensor, atlas, label, unite_struct = True):
     """
-    gets the data ready for regression by aggregating over the parcels
-
+    aggregates the data ready for regression over parcels or entire structure
     """
     # get data tensor
     atlas, ainfo = am.get_atlas(atlas,atlas_dir)
@@ -45,55 +45,87 @@ def get_data(tensor, atlas, label, unite_struct = True):
 
 
     # aggregate over voxels/vertices within parcels
-    data, parcels_cereb = fdata.agg_parcels(tensor , atlas.label_vector, fcn=np.nanmean)
-    return data, info, parcels_cereb
+    data, parcel_labels = fdata.agg_parcels(tensor , atlas.label_vector, fcn=np.nanmean)
+    return data, ainfo, parcel_labels
 
-def get_summary(outpath = cdata.conn_dir, 
-                dataset = "WMFS", 
+def add_rest(X,Y,info):
+    """ adds rest to X and Y data matrices and info 
+    Args:
+        X (ndarray): n_subj,n_cond,n_reg data matrix  
+        Y (ndarray):  n_subj,ncond,n_reg data matrix
+        info (DataFrame): Dataframe with information 
+
+    Returns:
+        X (ndarray): n_subj,n_cond+1,n_reg data matrix  
+        Y (ndarray):  n_subj,ncond+1,n_reg data matrix
+        info (DataFrame): Dataframe with information 
+    """
+    n_subj,n_cond,n_reg = X.shape
+    X_new = np.zeros((n_subj,n_cond+1,n_reg))
+    X_new[:,:-1,:]=X
+    Y_new = np.zeros((n_subj,n_cond+1,n_reg))
+    Y_new[:,:-1,:]=Y
+    a = info.iloc[:1]
+    a['cond_name']='rest'
+    a['reg_id']=max(info.reg_id)+1
+    info_new = pd.concat([info,pd.DataFrame(a)],ignore_index=True)
+    return X_new,Y_new,info_new
+
+def get_summary(dataset = "WMFS", 
                 ses_id = 'ses-02', 
                 type = "CondAll", 
-                cerebellum =None, 
-                cortex = None, 
-                unite_struct = False):
-
+                cerebellum_space = 'SUIT3',
+                cortex_space = 'fs32k',
+                cerebellum_roi =None,
+                cortex_roi = None):
     """
-    get summary dataframe to plot scatterplot for average ceerbellum vs average cortex
+    get summary dataframe to plot scatterplot for cerebellum vs. cortex
     Args: 
-        outpath (str)      - path to save the file
         dataset_name (str) - name of the dataset (as is used in functional fusion framework)
         ses_id (str)       - name of the session in the dataset you want to use
 
     Returns:
-        summ_df (pd.DataFrame) - summary dataframe to be saved and used for plotting
+        sum_df (pd.DataFrame) - summary dataframe to be saved and used for plotting
     """
-    tensor_cerebellum, info, _ = fdata.get_dataset(base_dir,dataset,atlas="SUIT3",sess=ses_id,type=type, info_only=False)
-    tensor_cortex, info, _ = fdata.get_dataset(base_dir,dataset,atlas="fs32k",sess=ses_id,type=type, info_only=False)
+    # Get the dataset from Functional Fusion framework
+    tensor_cerebellum, info, _ = fdata.get_dataset(base_dir,
+            dataset,
+            atlas=cerebellum_space,
+            sess=ses_id,
+            type=type)
+    tensor_cortex, info, _ = fdata.get_dataset(base_dir,
+            dataset,
+            atlas=cortex_space,
+            sess=ses_id,
+            type=type)
     
     # get label files for cerebellum and cortex
     ## if None is passed then it will be averaged over the whole
-    if cerebellum is not None:
-        cerebellum_label = atlas_dir + '/tpl-SUIT' + f'/atl-{cerebellum}_space-SUIT_dseg.nii'
-    if cortex is not None:
+    if cerebellum_roi is not None:
+        cerebellum_roi = atlas_dir + '/' + cerebellum_roi + '_dseg.nii'
+    if cortex_roi is not None:
         cortex_label = []
+        # Ultimately replace this with label CIFTI, to avoid additional code-writing
         for hemi in ['L', 'R']:
-            cortex_label.append(atlas_dir + '/tpl-fs32k' + f'/{cortex}.{hemi}.label.gii')
+            cortex_label.append(atlas_dir + '/' + cortex_roi + f'.{hemi}.label.gii')
+        cortex_roi = cortex_label
 
     # get the data for all the subjects for cerebellum
-    Y_parcel, info, cerebellum_parcel = get_data(tensor_cerebellum, atlas = "SUIT3", label = cerebellum_label)
-    X_parcel, info, cortex_parcel = get_data(tensor_cortex, atlas = "fs32k", label = cortex_label)
+    Y_parcel, ainfo, cerebellum_parcel = agg_data(tensor_cerebellum, 
+            atlas = cerebellum_space, 
+            label = cerebellum_roi)
+
+    X_parcel, ainfo, cortex_parcel = agg_data(tensor_cortex, 
+            atlas = cortex_space, 
+            label = cortex_roi)
     
+    # do regression and get the summary DataFrame
+    X_parcel,Y_parcel,info_new = add_rest(X_parcel,Y_parcel,info)
+    D = ra.run_regress(X_parcel,Y_parcel,info_new,
+            fit_intercept = True)
+    return D
 
-    # do regression and get the summary dataframe 
-    D = ra.run_regress(X_parcel,Y_parcel,info,fit_intercept = False)
-
-    # save the dataframe
-    filepath = os.path.join(outpath, dataset, f'sc_{dataset}_{ses_id}_{cerebellum}_{cortex}.tsv')
-    D.to_csv(filepath, index = False, sep='\t')
-
-    return
-
-def get_summary_conn(outpath = cdata.conn_dir, 
-                     dataset = "WMFS", 
+def get_summary_conn(dataset = "WMFS", 
                      ses_id = 'ses-02', 
                      cerebellum = "Verbal2Back", 
                      cortex = "Icosahedron-1002_Sym.32k",
@@ -161,10 +193,10 @@ def get_summary_conn(outpath = cdata.conn_dir,
 
 
 if __name__ == "__main__":
-    get_summary(outpath = cdata.conn_dir, 
-                dataset = "WMFS", 
+    
+    D = get_summary(dataset = "WMFS", 
                 ses_id = 'ses-02', 
                 type = "CondAll", 
-                cerebellum ="Verbal2Back", 
-                cortex = "Verbal2Back.32k", 
-                unite_struct = True)
+                cerebellum_roi ='tpl-SUIT/atl-Verbal2Back_space-SUIT', 
+                cortex_roi = "tpl-fs32k/Verbal2Back.32k")
+    pass

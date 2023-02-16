@@ -177,19 +177,19 @@ if __name__ == "__main__":
 
     # prep_tensor(dataset_name = "IBC", ses_id = "ses-rsvplanguage")
     # prep_sc_whole(outpath = prep.conn_dir, 
-    #               dataset_name = "IBC", 
-    #               ses_id = 'ses-rsvplanguage')
+    #               dataset_name = "MDTB", 
+    #               ses_id = 'ses-s2')
 
-    prep_sc_roi(outpath = prep.conn_dir, 
-                dataset_name = "IBC", 
-                cerebellum = "VerbGen", 
-                cortex = "VerbGen.32k", 
-                ses_id = 'ses-rsvplanguage')
+    # prep_sc_roi(outpath = prep.conn_dir, 
+    #             dataset_name = "MDTB", 
+    #             cerebellum = "VerbGen", 
+    #             cortex = "VerbGen.32k", 
+    #             ses_id = 'ses-s2')
 
-    # prep_sc_conn(outpath = prep.conn_dir, 
-    #              dataset_name = "IBC", 
-    #              conn_dataset = "MDTB", 
-    #              conn_ses_id = "ses-s1", 
-    #              ses_id = 'ses-rsvplanguage', 
-    #              cerebellum = "WordRead", 
-    #              log_alpha = 8)
+    prep_sc_conn(outpath = prep.conn_dir, 
+                 dataset_name = "IBC", 
+                 conn_dataset = "MDTB", 
+                 conn_ses_id = "ses-s1", 
+                 ses_id = 'ses-rsvplanguage', 
+                 cerebellum = "VerbGen", 
+                 log_alpha = 8)

@@ -26,85 +26,50 @@ import nibabel as nb
 import nitools as nt
 
 
-# def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", contrast = "Verbal2Back"):
-#     """
-#     creates label nifti for roi cerebellum
-#     Args:
-#     cifti_img (nb.Cifti2) - cifti image of the extracted data
-#     info (pd.DataFrame) - pandas dataframe representing info for the dataset
-#     threshold (int) - percentile value used in thresholding
-#     contrast (str) - name of the contrast
-#     Returns:
-#     nifti_img (nb.nifti) - nifti of the label created
-#     """
-#     # get suit data
-#     data = cifti_img.get_fdata()
-#     # get the row index corresponding to the contrast
-#     info_con = info.loc[info.cond_name == contrast]
-
-#     if info_con.empty:
-#         raise ValueError("No rows found for contrast '{}'".format(contrast))
-#     # get the map for the contrast of interest
-#     con_map  = data[info_con.cond_num.values -1, :]
-
-#     # get threshold value (ignoring nans)
-#     percentile_value = np.nanpercentile(con_map, q=threshold)
-
-#     # apply threshold
-#     thresh_data = con_map > percentile_value
-#     # convert 0 to nan
-#     thresh_data[thresh_data != False] = np.nan
-
-#     # create an instance of the atlas (will be used to convert data to nifti)
-#     atlas, a_info = am.get_atlas(atlas_space,atlas_dir)
-#     nifti_img = atlas.data_to_nifti(1*thresh_data)
-#     return nifti_img
-
-def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", contrast1 = "x",contrast2='y'):
+def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", condition_1 = "x",condition_2='y'):
     """
     creates label nifti for roi cerebellum
     Args:
     cifti_img (nb.Cifti2) - cifti image of the extracted data
     info (pd.DataFrame) - pandas dataframe representing info for the dataset
     threshold (int) - percentile value used in thresholding
-    contrast1 (str) - name of the first contrast
-    contrast2 (str) - name of the second contrast
+    condition_1 (str) - name of the first condition
+    condition_2 (str) - name of the second condition (optional for creating a contrast between the conditions )
     Returns:
     nifti_img (nb.nifti) - nifti of the label created
     """
     # get suit data
     data = cifti_img.get_fdata()
-    # get the row index corresponding to the contrast 1
-    info_con1 = info.loc[info.names == contrast1]
-    print(info_con1)
 
-    if info_con1.empty:
-        raise ValueError("No rows found for contrast '{}'".format(contrast1))
+    # get the row index corresponding to the contrast 1
+    info_con_1 = info.loc[info.names == condition_1]
+    if info_con_1.empty:
+        raise ValueError("No rows found for contrast '{}'".format(condition_1))
         
     # get the map for the contrast 1 of interest
-    con_map1  = data[info_con1.cond_num_uni.values -1, :]
-    print(con_map1)
-    # get the row index corresponding to the contrast 2
-    info_con2 = info.loc[info.names == contrast2]
-    print(info_con2)
+    con_map_1  = data[info_con_1.cond_num_uni.values -1, :]
 
-    if info_con2.empty:
-        raise ValueError("No rows found for contrast '{}'".format(contrast2))
+
+    if condition_2 != 'y':
+        # get the row index corresponding to the contrast 2
+        info_con_2 = info.loc[info.names == condition_2]
+        if info_con_2.empty:
+            raise ValueError("No rows found for contrast '{}'".format(condition_2))
         
-    # get the map for the contrast 2 of interest
-    con_map2  = data[info_con2.cond_num_uni.values -1, :]
-    print(con_map2)
-    
-    # calculate the difference between the two contrasts
-    con_diff = con_map1 - con_map2
+        # get the map for the contrast 2 of interest
+        con_map_2  = data[info_con_2.cond_num_uni.values -1, :]
 
-    print(con_diff)
+        # calculate the difference between the two contrasts
+        con_final = con_map_1 - con_map_2
+    else:
+
+        con_final = con_map_1
 
     # get threshold value (ignoring nans)
-    percentile_value = np.nanpercentile(con_diff, q=threshold)
+    percentile_value = np.nanpercentile(con_final, q=threshold)
 
     # apply threshold
-    thresh_data = con_diff > percentile_value
+    thresh_data = con_final > percentile_value
     # convert 0 to nan
     thresh_data[thresh_data != False] = np.nan
 
@@ -113,46 +78,7 @@ def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", contr
     nifti_img = atlas.data_to_nifti(1*thresh_data)
     return nifti_img
 
-
-
-# def make_roi_cortex(cifti_img, info, threshold, contrast = "Verbal2Back"):
-#     """
-#     creates label giftis for left and right hemisphere of the cortex
-#     Args:
-#     cifti_img (nb.Cifti2) - cifti image of the extracted data
-#     info (pd.DataFrame) - pandas dataframe representing info for the dataset
-#     threshold (int) - percentile value used in thresholding
-#     contrast (str) - name of the contrast
-#     Returns:
-#     gifti_img (list) - list of label giftis for left and right hemispheres
-#     """
-#     # get data for left and right hemisphere
-#     data_list = nt.surf_from_cifti(cifti_img)
-
-#     # threshold and create label
-#     gifti_img = []
-#     for i, name in zip([0, 1], ['CortexLeft', 'CortexRight']):
-#         # get data for the hemisphere
-#         data = data_list[i]
-
-#         # get the contrast map
-#         # get the row index corresponding to the contrast
-#         info_con = info.loc[info.cond_name == contrast]
-#         # get the map for the contrast of interest
-#         con_map  = data[info_con.cond_num.values -1, :]
-#         print(con_map)
-#         # get threshold value (ignoring nans)
-#         percentile_value = np.nanpercentile(con_map, q=threshold)
-
-#         # apply threshold
-#         thresh_data = con_map > percentile_value
-#         # convert 0 to nan
-#         thresh_data[thresh_data != False] = np.nan
-#         # create label gifti
-#         gifti_img.append(nt.make_label_gifti(1*thresh_data.T, anatomical_struct=name))
-#     return gifti_img
-
-def make_roi_cortex(cifti_img, info, threshold, contrast1="x", contrast2="y"):
+def make_roi_cortex(cifti_img, info, threshold, condition_1="x", condition_2="y"):
     """
     creates label giftis for left and right hemisphere of the cortex
     Args:
@@ -173,26 +99,27 @@ def make_roi_cortex(cifti_img, info, threshold, contrast1="x", contrast2="y"):
         # get data for the hemisphere
         data = data_list[i]
 
-        # get the contrast map for contrast 1
         # get the row index corresponding to contrast 1
-        info_con1 = info.loc[info.names == contrast1]
+        info_con_1 = info.loc[info.names == condition_1]
         # get the map for contrast 1 of interest
-        con_map1 = data[info_con1.cond_num_uni.values -1, :]
+        con_map_1 = data[info_con_1.cond_num_uni.values -1, :]
 
-        # get the contrast map for contrast 2
-        # get the row index corresponding to contrast 2
-        info_con2 = info.loc[info.names == contrast2]
-        # get the map for contrast 2 of interest
-        con_map2 = data[info_con2.cond_num_uni.values -1, :]
+        if condition_2 != 'y':
+            # get the row index corresponding to contrast 2
+            info_con_2 = info.loc[info.names == condition_2]
+            # get the map for contrast 2 of interest
+            con_map2 = data[info_con_2.cond_num_uni.values -1, :]
 
-        # get the difference between the two contrast maps
-        contrast_diff = con_map1 - con_map2
+            # get the difference between the two contrast maps
+            con_final = con_map_1 - con_map2
+        else:
+            con_final = con_map_1
 
         # get threshold value (ignoring nans)
-        percentile_value = np.nanpercentile(contrast_diff, q=threshold)
+        percentile_value = np.nanpercentile(con_final, q=threshold)
 
         # apply threshold
-        thresh_data = contrast_diff > percentile_value
+        thresh_data = con_final > percentile_value
         # convert 0 to nan
         thresh_data[thresh_data != False] = np.nan
         # create label gifti
@@ -201,8 +128,8 @@ def make_roi_cortex(cifti_img, info, threshold, contrast1="x", contrast2="y"):
 
 
 def make_roi_label(dataset_name = "MDTB", 
-                   contrast1 = "VerbGen", 
-                   contrast2 = 'Y',
+                   condition_1 = "x", 
+                   condition_2 = 'y',
                    ses_id = "ses-s1", 
                    threshold = 80):
     """
@@ -226,15 +153,24 @@ def make_roi_label(dataset_name = "MDTB",
     info_tsv = pd.read_csv(Data.data_dir.format("group") + f"/group_ses-archi_info-Condhalf.tsv", sep="\t")
 
     # label files for the cerebellum and cortex
-    roi_nifti = make_roi_cerebellum(cifti_cerebellum, info_tsv, threshold, atlas_space = "SUIT3", contrast1 = "speech-half1", contrast2='non_speech-half1')
-    roi_gifti = make_roi_cortex(cifti_cortex, info_tsv, threshold, contrast1 = "speech-half1",contrast2 = 'non_speech-half1')
+    roi_nifti = make_roi_cerebellum(cifti_cerebellum, info_tsv, threshold, atlas_space = "SUIT3", condition_1 = condition_1 , condition_2 = condition_2)
+    roi_gifti = make_roi_cortex(cifti_cortex, info_tsv, threshold, condition_1 = condition_1, condition_2 = condition_2)
 
-    # save the nifti image
-    nb.save(roi_nifti, Data.atlas_dir + '/tpl-SUIT' + f'/atl-speechvsnonspeech_space-SUIT_dseg.nii')
-    
-    # save label gifti images
-    for i, h in enumerate(['L', 'R']):
-        nb.save(roi_gifti[i], Data.atlas_dir + '/tpl-fs32k' + f'/speechvsnonspeech.32k.{h}.label.gii')
+    if condition_2 != 'y':
+        # save the nifti image
+        nb.save(roi_nifti, save_dir + '/tpl-SUIT' + f'/atl-{condition_1}_vs_{condition_2}_space-SUIT_dseg.nii')
+        
+        # save label gifti images
+        for i, h in enumerate(['L', 'R']):
+            nb.save(roi_gifti[i], save_dir + '/tpl-fs32k' + f'/vertical-{condition_1}_vs_{condition_2}.32k.{h}.label.gii')
+
+    else: 
+        # save the nifti image
+        nb.save(roi_nifti, save_dir + '/tpl-SUIT' + f'/atl-{condition_1}_space-SUIT_dseg.nii')
+        
+        # save label gifti images
+        for i, h in enumerate(['L', 'R']):
+            nb.save(roi_gifti[i], save_dir + '/tpl-fs32k' + f'/{condition_1}.32k.{h}.label.gii')
 
     return
 
@@ -248,13 +184,16 @@ if __name__ == "__main__":
     if not Path(base_dir).exists():
         base_dir = '/cifs/diedrichsen/data/FunctionalFusion'
         conn_dir = '/cifs/diedrichsen/data/Cerebellum/connectivity'
+        save_dir = '/cifs/diedrichsen/data/Cerebellum/Language/atlases'
+    if not Path(base_dir).exists():
+        base_dir = '/srv/diedrichsen/data/FunctionalFusion'
+        conn_dir = '/srv/diedrichsen/data/Cerebellum/connectivity'
+        save_dir = '/srv/diedrichsen/data/Cerebellum/Language/atlases'
     atlas_dir = base_dir + '/Atlases'
-
-
+    
 
 
     make_roi_label(dataset_name = "IBC", 
-                   contrast1 = "speech-half1", 
-                   contrast2 = 'non_speech-half1',
+                   condition_1 = "vertical_checkerboard-half1",    
                    ses_id = "ses-archi", 
                    threshold = 80)

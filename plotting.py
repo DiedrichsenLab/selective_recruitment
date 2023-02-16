@@ -39,21 +39,25 @@ def prep_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
     return g_df
 
 # add text labels to points
-def annotate(dataframe, text_size = 'small', text_weight = 'regular', labels = "load"):
+def annotate(dataframe, labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
     """
     annotate data points in the scatterplot
     Args:
     dataframe (pd.DataFrame)
+    labels (str,series) - column of the dataframe that is to be used as label
+        or dict that maps the index of the dataframe to a label
     text_size (str) 
     text_weight (str)
-    labels (str) - column of the dataframe that is to be used as label
+    labels (str) 
     """
     texts = []
-    for i in range(dataframe.shape[0]):   
+    if labels is str:
+        labels = dataframe[labels]
+    for i,d in dataframe.iterrows():   
         text = plt.text(
-                        dataframe.X[i]+0.001, 
-                        dataframe.Y[i], 
-                        s = dataframe[labels][i],
+                        d.X+0.001, 
+                        d.Y, 
+                        s = labels.loc[i],
                         horizontalalignment='left', 
                         size=text_size, 
                         weight=text_weight
@@ -62,7 +66,7 @@ def annotate(dataframe, text_size = 'small', text_weight = 'regular', labels = "
 
     adjust_text(texts) # make sure you have installed adjust_text
 
-# plotting:
+
 def make_scatterplot(dataframe, hue = "phase", style = "recall", label = "load", height = 4, aspect = 1):
     """
     make scatterplot
@@ -102,4 +106,53 @@ def make_scatterplot(dataframe, hue = "phase", style = "recall", label = "load",
 
     # get labels for each data point
     annotate(dataframe, text_size = 'small', text_weight = 'regular', labels = label)
+    return
+
+def make_scatterplot2(dataframe, split='cond_num', labels=None,
+        colors=None,markers=None):
+    """
+    make scatterplot
+    Args: 
+    dataframe (pd.DataFrame) - 
+            entire dataframe with individual subject data and fitted slopes and intercepts
+    split (str) - column name indicating the different conditions to be plotted
+    labels(dict)    - column name to be used to determine shape of the marker
+    label (str)    - column name to be used to determine the label of the data points
+    height (int)   - int to determine the height of the plot
+    aspect (float) - floating number to determine the aspect ratio of the plot
+    """
+    # do the scatter plot
+    grouped = dataframe.groupby([split])
+    agg_kw = {'X':np.mean,'Y': np.mean,
+             'slope':np.mean,
+             'intercept':np.mean}
+    df = grouped.agg(agg_kw)
+    
+    df["Y_CI"] = grouped.Y.apply(sps.sem) * 1.96
+    df["X_CI"] = grouped.X.apply(sps.sem)*1.96
+    df['X_err'] = grouped.res.apply(sps.sem)*1.96
+
+
+
+    ax = sns.scatterplot(data=df, x='X', y='Y', style = split, hue = split, s = 100,legend=None,markers=markers,palette=colors)
+
+
+    # put the errorbars in 
+    plt.errorbar(x = df['X'], 
+                 y = df['Y'], 
+                 yerr = df['X_err'],
+                 elinewidth=2, 
+                fmt='none', # no marker will be used when plotting the error bars
+                color='grey', 
+                ecolor='0.9'
+                )
+    # set labels
+    ax.set_xlabel('Cortical Activation (a.u.)')
+    ax.set_ylabel('Cerebellar Activation (a.u.)')
+
+    # get labels for each data point
+    annotate(df, 
+            text_size = 'small', 
+            text_weight = 'regular', 
+            labels = dataframe[split].map(labels))
     return

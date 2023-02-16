@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 # modules from connectivity
 import cortico_cereb_connectivity.prepare_data as cprep
 import selective_recruitment.rsa as rsa
-import selective_recruitment.select_recruite as sr
+import selective_recruitment.recruite_ana as sr
 
 
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'

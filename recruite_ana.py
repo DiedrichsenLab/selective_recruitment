@@ -15,7 +15,7 @@ from pathlib import Path
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
 import Functional_Fusion.matrix as matrix
-
+import selective_recruitment.globals as gl
 # modules from connectivity
 # import cortico_cereb_connectivity.data as cdata
 
@@ -81,7 +81,6 @@ def calc_mean(data,info,
     
     return mean_d,inf
 
-# use connectivity model to predict cerebellar activation
 def predict_cerebellum(weights, scale, X, atlas, info, fwhm = 0):
     """
     makes predictions for the cerebellar activation
@@ -120,7 +119,129 @@ def predict_cerebellum(weights, scale, X, atlas, info, fwhm = 0):
         Yhat[i, :, :] = np.r_[Yhat[i, info.half == 2, :], Yhat[i, info.half == 1, :]]
     return Yhat
 
-# regress cerebellar data onto cortical/cerebellar predictions
+
+def agg_data(tensor, atlas, label, unite_struct = True):
+    """
+    aggregates the data ready for regression over parcels or entire structure
+    """
+    # get data tensor
+    atlas, ainfo = am.get_atlas(atlas,gl.atlas_dir)
+
+    # NOTE: atlas.get_parcel takes in path to the label file, not an array
+    if (isinstance(atlas, am.AtlasSurface)) | (isinstance(atlas, am.AtlasSurfaceSymmetric)):
+        if label is not None:
+            atlas.get_parcel(label, unite_struct = unite_struct)
+            
+        else: # passes on mask to get parcel if you want the average across the whole structure
+            atlas.label_vector = np.ones((atlas.P,),dtype=int)
+
+    else:
+        if label is not None:
+            atlas.get_parcel(label)
+        else: # passes on mask to get parcel if you want the average across the whole structure
+            atlas.label_vector = np.ones((atlas.P,),dtype=int)
+
+
+    # aggregate over voxels/vertices within parcels
+    data, parcel_labels = ds.agg_parcels(tensor , 
+                    atlas.label_vector, 
+                    fcn=np.nanmean)
+    return data, ainfo, parcel_labels
+
+def add_rest_to_data(X,Y,info):
+    """ adds rest to X and Y data matrices and info
+    Args:
+        X (ndarray): n_subj,n_cond,n_reg data matrix  
+        Y (ndarray):  n_subj,ncond,n_reg data matrix
+        info (DataFrame): Dataframe with information 
+
+    Returns:
+        X (ndarray): n_subj,n_cond+1,n_reg data matrix  
+        Y (ndarray):  n_subj,ncond+1,n_reg data matrix
+        info (DataFrame): Dataframe with information 
+    """
+    n_subj,n_cond,n_reg = X.shape
+    X_new = np.zeros((n_subj,n_cond+1,n_reg))
+    X_new[:,:-1,:]=X
+    Y_new = np.zeros((n_subj,n_cond+1,n_reg))
+    Y_new[:,:-1,:]=Y
+    a = pd.DataFrame({'cond_name':'rest',
+                'reg_id':max(info.reg_id)+1,
+                'cond_num':max(info.cond_num)+1},index=[0])
+    info_new = pd.concat([info,pd.DataFrame(a)],ignore_index=True)
+    return X_new,Y_new,info_new
+
+def get_summary(dataset = "WMFS", 
+                ses_id = 'ses-02', 
+                type = "CondAll", 
+                cerebellum_space = 'SUIT3',
+                cortex_space = 'fs32k',
+                cerebellum_roi =None,
+                cortex_roi = None,
+                add_rest = False):
+    """
+    get summary dataframe for cerebellum vs. cortex
+    Args: 
+        dataset_name (str) - name of the dataset (as is used in functional fusion framework)
+        ses_id (str)       - name of the session in the dataset you want to use
+
+    Returns:
+        sum_df (pd.DataFrame) - summary dataframe
+    """
+    # Get the dataset from Functional Fusion framework
+    tensor_cerebellum, info, _ = ds.get_dataset(gl.base_dir,
+            dataset,
+            atlas=cerebellum_space,
+            sess=ses_id,
+            type=type)
+    tensor_cortex, info, _ = ds.get_dataset(gl.base_dir,
+            dataset,
+            atlas=cortex_space,
+            sess=ses_id,
+            type=type)
+    
+    # get label files for cerebellum and cortex
+    ## if None is passed then it will be averaged over the whole
+    if cerebellum_roi is not None:
+        cerebellum_roi = gl.atlas_dir + '/' + cerebellum_roi + '_dseg.nii'
+    if cortex_roi is not None:
+        cortex_label = []
+        # Ultimately replace this with label CIFTI, to avoid additional code-writing
+        for hemi in ['L', 'R']:
+            cortex_label.append(gl.atlas_dir + '/' + cortex_roi + f'.{hemi}.label.gii')
+        cortex_roi = cortex_label
+
+    # get the data for all the subjects for cerebellum
+    Y_parcel, ainfo, cerebellum_parcel = agg_data(tensor_cerebellum, 
+            atlas = cerebellum_space, 
+            label = cerebellum_roi)
+
+    X_parcel, ainfo, cortex_parcel = agg_data(tensor_cortex, 
+            atlas = cortex_space, 
+            label = cortex_roi)
+    
+    # do regression and get the summary DataFrame
+    if add_rest:
+        X_parcel,Y_parcel,info = add_rest_to_data(X_parcel,Y_parcel,info)
+    
+    # Transform into a dataframe with X and Y data 
+    n_subj,n_cond,n_roi = X_parcel.shape
+
+    summary_list = [] 
+    for i in range(n_subj):
+        for r in range(n_roi):
+            info_sub = info.copy()
+            vec = np.ones((len(info_sub),))
+            info_sub["sn"]    = i * vec
+            info_sub["roi"]   = r * vec
+            info_sub["X"]     = X_parcel[i,:,r]
+            info_sub["Y"]     = Y_parcel[i,:,r]
+
+            summary_list.append(info_sub)
+        
+    summary_df = pd.concat(summary_list, axis = 0,ignore_index=True)
+    return summary_df
+
 def regressXY(X, Y, fit_intercept = False):
     """
     regresses Y onto X.
@@ -134,31 +255,12 @@ def regressXY(X, Y, fit_intercept = False):
         residual (np.ndarray) - residuals 
         R2 (float) - R2 of the regression fit
     """
-
-    # Estimate regression coefficients
-    # X = X.reshape(-1, 1)
-    # Y = Y.reshape(-1, 1)
     if fit_intercept:
         X = np.c_[ np.ones(X.shape[0]), X ]  
-    # coef = np.linalg.inv(X.T@X) @ (X.T@Y)
-    
-    # # matrix-wise simple regression? NOT USED HERE
-    # # c = np.sum(X*Y, axis = 0) / np.sum(X*X, axis = 0)
 
-    # # Calculate residuals
-    # residual = Y - X@coef
-    # print(sum(residual))
-
-    # X = X.reshape(-1, 1)
-    # Y = Y.reshape(-1, 1)
-
-    if len(X.shape)>1:
-        X = X.reshape(X.shape[0], )
-        Y = Y.reshape(Y.shape[0], )
-
-    model = np.polyfit(X, Y, 1)
-    predict = np.poly1d(model)
-    residual = Y - predict(X)
+    coef = np.linalg.pinv(X) @ Y 
+    predict = X @ coef
+    residual = Y - predict
     # print(sum(residual))
 
     # calculate R2 
@@ -166,33 +268,38 @@ def regressXY(X, Y, fit_intercept = False):
     tss = sum((Y - np.mean(Y))**2)
     R2 = 1 - rss/tss
 
-    return model[1], residual, R2
+    return coef, residual, R2
 
-def run_regress(X,Y,info,fit_intercept = False):
-    # Looping over subject and running the regression for 
-    # Each of them. 
-    n_subj = X.shape[0]
+def run_regress(df,fit_intercept = False):
+    """ Runs regression analysis for each subject and ROI. 
+    Args:
+        df (DataFrame): Data frame with sn, roi, X & Y (get_summary) 
+        fit_intercept (bool): Use intercept in regression. Default = False
+    Returns:
+        df (DataFrame): resulting data frame
+    """
+    subjs = np.unique(df.sn)
+    rois = np.unique(df.roi)
+    df['slope']=[0]*len(df)
+    df['intercept']=[0]*len(df)
+    df['R2']=[0]*len(df)
+    df['res']=[0]*len(df)
+    for s in subjs:
+        for r in rois:
+            indx = (df.sn==s) & (df.roi==r)
 
-    summary_list = [] 
-    for i in range(n_subj):
-        info_sub = info.copy()
-        x = X[i,:]
-        y = Y[i,:]
+            coef, res, R2 = regressXY(df.X[indx].to_numpy(),
+                                      df.Y[indx].to_numpy(), 
+                                     fit_intercept = fit_intercept)
+            vec = np.ones(res.shape)
+            df.loc[indx,'res'] = res
+            df.loc[indx,'slope'] = coef[-1] * vec
+            if fit_intercept:
+                df.loc[indx,'intercept'] = coef[0] * vec
+            df.loc[indx,'R2']= R2 * vec
+    return df
 
-        coef, res, R2 = regressXY(x, y, fit_intercept = fit_intercept)
-        info_sub["sn"]    = i * np.ones([len(info_sub), 1])
-        info_sub["X"]     = x # X is either the cortical data or the predicted cerebellar activation
-        info_sub["Y"]     = y
-        info_sub["res"]   = res
-        info_sub["coef"]  = coef * np.ones([len(info_sub), 1])
-        info_sub["R2"]    = R2 * np.ones([len(info_sub), 1])
 
-        summary_list.append(info_sub)
-        
-    summary_df = pd.concat(summary_list, axis = 0)
-    return summary_df
-
-# make cerebellar roi
 def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", localizer = "Verbal2Back"):
     """
     creates label nifti for roi cerebellum

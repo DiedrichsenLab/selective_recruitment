@@ -15,6 +15,18 @@ from statsmodels.stats.anova import AnovaRM # perform F test
 # setting working directory 
 wkdir = '/Volumes/diedrichsen_data$/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
+def do_regress():
+    D = ra.get_summary(dataset = "WMFS", 
+                ses_id = 'ses-02', 
+                type = "CondAll", 
+                cerebellum_roi = None, 
+                cortex_roi = None,
+                add_rest = True)
+    D = ra.run_regress(D,fit_intercept=True)
+    D.to_csv(wkdir + '/ROI_all.tsv',sep='\t')
+
+
+
 def plot():
     """
     """
@@ -53,5 +65,6 @@ def plot():
     
 
 if __name__ == "__main__":
+    # do_regress()
     plot()
     pass

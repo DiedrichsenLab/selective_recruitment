@@ -268,7 +268,7 @@ def regressXY(X, Y, fit_intercept = False):
     tss = sum((Y - np.mean(Y))**2)
     R2 = 1 - rss/tss
 
-    return coef[-1], residual, R2
+    return coef, residual, R2
 
 def run_regress(df,fit_intercept = False):
     """ Runs regression analysis for each subject and ROI. 
@@ -280,7 +280,8 @@ def run_regress(df,fit_intercept = False):
     """
     subjs = np.unique(df.sn)
     rois = np.unique(df.roi)
-    df['coef']=[0]*len(df)
+    df['slope']=[0]*len(df)
+    df['intercept']=[0]*len(df)
     df['R2']=[0]*len(df)
     df['res']=[0]*len(df)
     for s in subjs:
@@ -292,9 +293,10 @@ def run_regress(df,fit_intercept = False):
                                      fit_intercept = fit_intercept)
             vec = np.ones(res.shape)
             df.loc[indx,'res'] = res
-            df.loc[indx,'coef'] = coef * vec
+            df.loc[indx,'slope'] = coef[-1] * vec
+            if fit_intercept:
+                df.loc[indx,'intercept'] = coef[0] * vec
             df.loc[indx,'R2']= R2 * vec
-
     return df
 
 

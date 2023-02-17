@@ -123,7 +123,8 @@ def make_scatterplot2(dataframe, split='cond_num', labels=None,
     """
     # do the scatter plot
     grouped = dataframe.groupby([split])
-    agg_kw = {'X':np.mean,'Y': np.mean,
+    agg_kw = {split:'first',
+              'X':np.mean,'Y': np.mean,
              'slope':np.mean,
              'intercept':np.mean}
     df = grouped.agg(agg_kw)
@@ -132,20 +133,24 @@ def make_scatterplot2(dataframe, split='cond_num', labels=None,
     df["X_CI"] = grouped.X.apply(sps.sem)*1.96
     df['X_err'] = grouped.res.apply(sps.sem)*1.96
 
-
-
-    ax = sns.scatterplot(data=df, x='X', y='Y', style = split, hue = split, s = 100,legend=None,markers=markers,palette=colors)
-
-
-    # put the errorbars in 
+    # add  the appropriate errorbars  
     plt.errorbar(x = df['X'], 
                  y = df['Y'], 
                  yerr = df['X_err'],
                  elinewidth=2, 
                 fmt='none', # no marker will be used when plotting the error bars
-                color='grey', 
-                ecolor='0.9'
+                color=(0.3,0.3,0.3), 
+                ecolor=(0.5,0.5,0.5)
                 )
+
+    # Plot average regression line 
+    xrange = np.array([df['X'].min(),df['X'].max()])
+    ypred = xrange*df.slope.mean()+df.intercept.mean()
+    plt.plot(xrange,ypred,'k-')
+
+    # Make scatterplot, determining the markers and colors from the dictionary 
+    ax = sns.scatterplot(data=df, x='X', y='Y', style = split, hue = split, s = 100,legend=None,markers=markers,palette=colors)
+
     # set labels
     ax.set_xlabel('Cortical Activation (a.u.)')
     ax.set_ylabel('Cerebellar Activation (a.u.)')
@@ -154,5 +159,5 @@ def make_scatterplot2(dataframe, split='cond_num', labels=None,
     annotate(df, 
             text_size = 'small', 
             text_weight = 'regular', 
-            labels = dataframe[split].map(labels))
+            labels = df[split].map(labels))
     return

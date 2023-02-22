@@ -45,14 +45,15 @@ extract_wmfs(ses_id='ses-02', type='CondAll', atlas='fs32k')
 ```
 import selective_recruitment.recruite_ana as ra
 
-D = ra.get_summary(dataset = "WMFS", 
+D_whole = ra.get_summary(dataset = "WMFS", 
                 ses_id = 'ses-02', 
                 type = "CondAll", 
                 cerebellum_roi =None, 
                 cortex_roi = None,
                 add_rest = True)
+# you can save the datafarme on your computer
 
-D = ra.get_summary(dataset = "WMFS", 
+D_roi = ra.get_summary(dataset = "WMFS", 
                 ses_id = 'ses-02', 
                 type = "CondAll", 
                 cerebellum_roi ="Verbal2Back", 

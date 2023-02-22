@@ -21,8 +21,8 @@ if not Path(out_dir).exists():
 
 def get_summary_conn(dataset = "WMFS", 
                      ses_id = 'ses-02', 
-                     cerebellum = "Verbal2Back", 
-                     cortex = "Icosahedron-1002_Sym.32k",
+                     cerebellum_roi = "Verbal2Back", 
+                     cortex_roi = "Icosahedron-1002_Sym.32k",
                      type = "CondHalf", 
                      add_rest = True,
                      conn_dataset = "MDTB", 
@@ -40,7 +40,7 @@ def get_summary_conn(dataset = "WMFS",
 
     # get connectivity weights and scaling 
     conn_dir = os.path.join(gl.conn_dir, conn_dataset, "train")
-    weights = np.load(os.path.join(conn_dir, f"{cortex}_{conn_ses_id}_{conn_method}_logalpha_{log_alpha}_best_weights.npy"))
+    weights = np.load(os.path.join(conn_dir, f"{cortex_roi}_{conn_ses_id}_{conn_method}_logalpha_{log_alpha}_best_weights.npy"))
     scale = np.load(os.path.join(conn_dir, f'{conn_dataset}_scale.npy'))
 
     # prepare the cortical data 
@@ -48,7 +48,7 @@ def get_summary_conn(dataset = "WMFS",
     # BECAUSE the models have been trained using tesselations
     cortex_label = []
     for hemi in ['L', 'R']:
-        cortex_label.append(gl.atlas_dir + '/tpl-fs32k' + f'/{cortex}.{hemi}.label.gii')
+        cortex_label.append(gl.atlas_dir + '/tpl-fs32k' + f'/{cortex_roi}.{hemi}.label.gii')
     X_parcel, ainfo, X_parcel_labels = ra.agg_data(tensor_cortex, "fs32k", cortex_label, unite_struct = False)
 
     # use cortical data to predict cerebellar data (voxel-wise)
@@ -57,8 +57,8 @@ def get_summary_conn(dataset = "WMFS",
 
     # get the cerebellar data
     # NOTE: if None is passed, then it will average over the whole cerebellum
-    if cerebellum is not None:
-        cerebellum_label = gl.atlas_dir + '/tpl-SUIT' + f'/atl-{cerebellum}_space-SUIT_dseg.nii'
+    if cerebellum_roi is not None:
+        cerebellum_label = gl.atlas_dir + '/tpl-SUIT' + f'/atl-{cerebellum_roi}_space-SUIT_dseg.nii'
         
 
         # get observed cerebellar data
@@ -99,29 +99,29 @@ def get_summary_conn(dataset = "WMFS",
 
 if __name__ == "__main__":
 
-    print("connectivity for MDTB parcellation")
-    D = get_summary_conn(dataset = "WMFS", 
-                        ses_id = 'ses-02', 
-                        cerebellum = "MDTB10", 
-                        cortex = "Icosahedron-1002_Sym.32k",
-                        type = "CondHalf",
-                        add_rest=True,  
-                        conn_dataset = "MDTB", 
-                        conn_method = "L2Regression", 
-                        log_alpha = 8, 
-                        conn_ses_id = "ses-s1")
+    # print("connectivity for MDTB parcellation")
+    # D = get_summary_conn(dataset = "WMFS", 
+    #                     ses_id = 'ses-02', 
+    #                     cerebellum_roi = "MDTB10", 
+    #                     cortex_roi = "Icosahedron-1002_Sym.32k",
+    #                     type = "CondHalf",
+    #                     add_rest=True,  
+    #                     conn_dataset = "MDTB", 
+    #                     conn_method = "L2Regression", 
+    #                     log_alpha = 8, 
+    #                     conn_ses_id = "ses-s1")
 
-    # do regression
-    D = ra.run_regress(D,fit_intercept=True)
+    # # do regression
+    # D = ra.run_regress(D,fit_intercept=True)
 
-    D.to_csv(out_dir + '/ROI_MDTB10_conn.tsv',sep='\t')
+    # D.to_csv(out_dir + '/ROI_MDTB10_conn.tsv',sep='\t')
 
     #####################################################
     print("connectivity for hierarchical parcellation")
     D = get_summary_conn(dataset = "WMFS", 
                         ses_id = 'ses-02', 
-                        cerebellum = "NettekovenSym34", 
-                        cortex = "Icosahedron-1002_Sym.32k",
+                        cerebellum_roi = "NettekovenSym34", 
+                        cortex_roi = "Icosahedron-1002_Sym.32k",
                         type = "CondHalf",
                         add_rest=True,  
                         conn_dataset = "MDTB", 
@@ -138,8 +138,8 @@ if __name__ == "__main__":
     print("connectivity for ROI defined on verbal 2back task of MDTB")
     D = get_summary_conn(dataset = "WMFS", 
                         ses_id = 'ses-02', 
-                        cerebellum = "Verbal2Back", 
-                        cortex = "Icosahedron-1002_Sym.32k",
+                        cerebellum_roi = "Verbal2Back", 
+                        cortex_roi = "Icosahedron-1002_Sym.32k",
                         type = "CondHalf",
                         add_rest=True,  
                         conn_dataset = "MDTB", 

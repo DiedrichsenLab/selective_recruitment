@@ -38,6 +38,7 @@ fastjsonschema==2.16.2
 Flask==2.2.2
 Flask-Compress==1.13
 fonttools==4.38.0
+h5py==3.8.0
 idna==3.4
 importlib-metadata==6.0.0
 ipykernel==6.21.1
@@ -59,6 +60,7 @@ jupyterlab-widgets==3.0.5
 kiwisolver==1.4.4
 lxml==4.9.2
 MarkupSafe==2.1.2
+mat73==0.60
 matplotlib==3.6.3
 matplotlib-inline==0.1.6
 mayavi==4.8.1

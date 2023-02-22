@@ -61,6 +61,5 @@ D = ra.get_summary(dataset = "WMFS",
 ```
 
 ## 3. Using Connectivity weights
-
-##
+in scripts, use script_prep_sc to create the summary dataframe for the connectivity-based approach
 

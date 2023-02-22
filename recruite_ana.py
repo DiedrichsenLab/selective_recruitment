@@ -144,8 +144,8 @@ def agg_data(tensor, atlas, label, unite_struct = True):
 
     # aggregate over voxels/vertices within parcels
     data, parcel_labels = ds.agg_parcels(tensor , 
-                    atlas.label_vector, 
-                    fcn=np.nanmean)
+                                         atlas.label_vector, 
+                                         fcn=np.nanmean)
     return data, ainfo, parcel_labels
 
 def add_rest_to_data(X,Y,info):
@@ -190,15 +190,15 @@ def get_summary(dataset = "WMFS",
     """
     # Get the dataset from Functional Fusion framework
     tensor_cerebellum, info, _ = ds.get_dataset(gl.base_dir,
-            dataset,
-            atlas=cerebellum_space,
-            sess=ses_id,
-            type=type)
+                                                dataset,
+                                                atlas=cerebellum_space,
+                                                sess=ses_id,
+                                                type=type)
     tensor_cortex, info, _ = ds.get_dataset(gl.base_dir,
-            dataset,
-            atlas=cortex_space,
-            sess=ses_id,
-            type=type)
+                                            dataset,
+                                            atlas=cortex_space,
+                                            sess=ses_id,
+                                            type=type)
     
     # get label files for cerebellum and cortex
     ## if None is passed then it will be averaged over the whole
@@ -220,7 +220,7 @@ def get_summary(dataset = "WMFS",
             atlas = cortex_space, 
             label = cortex_roi)
     
-    # do regression and get the summary DataFrame
+    # Want to add rest as a condition?
     if add_rest:
         X_parcel,Y_parcel,info = add_rest_to_data(X_parcel,Y_parcel,info)
     
@@ -261,7 +261,6 @@ def regressXY(X, Y, fit_intercept = False):
     coef = np.linalg.pinv(X) @ Y 
     predict = X @ coef
     residual = Y - predict
-    # print(sum(residual))
 
     # calculate R2 
     rss = sum(residual**2)

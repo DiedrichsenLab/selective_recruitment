@@ -167,7 +167,7 @@ def add_rest_to_data(X,Y,info):
     Y_new[:,:-1,:]=Y
     a = pd.DataFrame({'cond_name':'rest',
                 'reg_id':max(info.reg_id)+1,
-                'cond_num':max(info.cond_num)+1},index=[0])
+                'cond_num':max(info.reg_id)+1},index=[0])
     info_new = pd.concat([info,pd.DataFrame(a)],ignore_index=True)
     return X_new,Y_new,info_new
 

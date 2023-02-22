@@ -65,7 +65,7 @@ def get_summary_conn(dataset = "WMFS",
         Y_parcel, ainfo, Y_parcel_labels = ra.agg_data(tensor_cerebellum, "SUIT3", cerebellum_label, unite_struct = False)
 
         # get predicted cerebellar data
-        Yhat_parcel, ainfo, _ = ra.agg_data(Yhat, "SUIT3", cerebellum_label, unite_struct = False)
+        Yhat_parcel, ainfo, Yhat_parcel_labels = ra.agg_data(Yhat, "SUIT3", cerebellum_label, unite_struct = False)
 
     else: 
         # there's only one parcel: the whole cerebellum
@@ -87,7 +87,7 @@ def get_summary_conn(dataset = "WMFS",
             info_sub = info.copy()
             vec = np.ones((len(info_sub),))
             info_sub["sn"]    = i * vec
-            info_sub["roi"]   = r * vec
+            info_sub["roi"]   = Yhat_parcel_labels[r] * vec
             info_sub["X"]     = Yhat_parcel[i,:,r]
             info_sub["Y"]     = Y_parcel[i,:,r]
 

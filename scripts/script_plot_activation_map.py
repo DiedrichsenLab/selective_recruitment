@@ -27,9 +27,9 @@ from PIL import Image
 # set base directory of the functional fusion 
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
 if not Path(base_dir).exists():
-    base_dir = '/srv/diedrichsen/data/FunctionalFusion'
+    base_dir = '/cifs/diedrichsen/data/FunctionalFusion'
 atlas_dir = base_dir + '/Atlases'
-conn_dir = '/srv/diedrichsen/data/Cerebellum/connectivity/'
+conn_dir = '/cifs/diedrichsen/data/Cerebellum/connectivity/'
 
 # create an instance of WMFS class
 Dataset = fdata.get_dataset_class(base_dir, dataset= "WMFS")

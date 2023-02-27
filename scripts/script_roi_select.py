@@ -147,7 +147,7 @@ def make_roi_label(dataset_name = "MDTB",
     cifti_cortex = nb.load(Data.data_dir.format("group") + f"/group_space-fs32k_{ses_id}_Condhalf.dscalar.nii")
     
     # load info (will be used to select contrast)
-    info_tsv = pd.read_csv(Data.data_dir.format("group") + f"/group_ses-archi_info-Condhalf.tsv", sep="\t")
+    info_tsv = pd.read_csv(Data.data_dir.format("group") + f"/group_{ses_id}_info-Condhalf.tsv", sep="\t")
 
     # label files for the cerebellum and cortex
     roi_nifti = ra.make_roi_cerebellum(cifti_cerebellum, info_tsv, threshold, atlas_space = "SUIT3", contrast = "Verbal2Back")
@@ -191,6 +191,6 @@ if __name__ == "__main__":
 
 
     make_roi_label(dataset_name = "IBC", 
-                   condition_1 = "vertical_checkerboard-half1",    
+                   condition_1 = "non_speech-half1",    
                    ses_id = "ses-archi", 
                    threshold = 80)

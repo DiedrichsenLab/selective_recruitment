@@ -146,6 +146,7 @@ def agg_data(tensor, atlas, label, unite_struct = True):
     data, parcel_labels = ds.agg_parcels(tensor , 
                                          atlas.label_vector, 
                                          fcn=np.nanmean)
+    
     return data, ainfo, parcel_labels
 
 def add_rest_to_data(X,Y,info):

@@ -23,7 +23,7 @@ import nibabel as nb
 import nitools as nt
 
 
-def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", condition_1 = "x",condition_2='y'):
+def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", condition_1 = 'non_speech-half1',condition_2='y'):
     """
     creates label nifti for roi cerebellum
     Args:
@@ -150,8 +150,8 @@ def make_roi_label(dataset_name = "MDTB",
     info_tsv = pd.read_csv(Data.data_dir.format("group") + f"/group_{ses_id}_info-Condhalf.tsv", sep="\t")
 
     # label files for the cerebellum and cortex
-    roi_nifti = ra.make_roi_cerebellum(cifti_cerebellum, info_tsv, threshold, atlas_space = "SUIT3", contrast = "Verbal2Back")
-    roi_gifti = ra.make_roi_cortex(cifti_cortex, info_tsv, threshold, contrast = "Verbal2Back")
+    roi_nifti = make_roi_cerebellum(cifti_cerebellum, info_tsv, threshold, atlas_space = "SUIT3", condition_1 = "non_speech-half1",condition_2='y')
+    roi_gifti = make_roi_cortex(cifti_cortex, info_tsv, threshold, condition_1 = "x",condition_2='y')
 
     if condition_2 != 'y':
         # save the nifti image

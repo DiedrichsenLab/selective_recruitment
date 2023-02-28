@@ -23,6 +23,10 @@ def get_summary_pair(dataset = 'IBC',
     """
     Get dataframe pair for two rois. Regression is done and included in the dataframe
 
+    Returns:
+    Summary_1: dataframe 1
+    Summary_2: dataframe 2
+
     """
     # Get first dataframe 
     df1 = ra.get_summary(dataset= dataset, ses_id= ses_id,type=type, add_rest= False,
@@ -114,7 +118,15 @@ def sim_summary_pair(x_min=-0.11380856779352279, x_max=0.04603078849976064,
 
 def plot_pair(dataframe_1,dataframe_2 , markers= None, labels = None, colors= None):
     fig, axes = plt.subplots(nrows=2, ncols=2, figsize= (15,10))
+    """
+    Plot the 4 plots for the shifting analysis. Outputs a figure with 4 plots.
 
+    Plot 1 [0,0]: Cerebellum vs Cortex for region 1
+    Plot 2 [1,0]: Cerebellum vs Cortex for region 2
+    Plot 1 [0,1]: Cereballar activations for region 1 vs region 2
+    Plot 1 [1,1]: Cortical activations for region 1 vs region 2
+
+    """
 
     ax = axes[0,0]
     plotting.make_scatterplots(dataframe_1, ax = ax, split='cond_name', markers= markers, labels=labels, colors=colors, title='Language ROI')

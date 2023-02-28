@@ -203,12 +203,12 @@ def get_summary(dataset = "WMFS",
     # get label files for cerebellum and cortex
     ## if None is passed then it will be averaged over the whole
     if cerebellum_roi is not None:
-        cerebellum_roi = gl.atlas_dir + '/' + cerebellum_roi + '_dseg.nii'
+        cerebellum_roi = gl.atlas_lang + '/' + cerebellum_roi + '_dseg.nii'
     if cortex_roi is not None:
         cortex_label = []
         # Ultimately replace this with label CIFTI, to avoid additional code-writing
         for hemi in ['L', 'R']:
-            cortex_label.append(gl.atlas_dir + '/' + cortex_roi + f'.{hemi}.label.gii')
+            cortex_label.append(gl.atlas_lang + '/' + cortex_roi + f'.{hemi}.label.gii')
         cortex_roi = cortex_label
 
     # get the data for all the subjects for cerebellum
@@ -326,7 +326,7 @@ def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", local
     thresh_data[thresh_data != False] = np.nan
 
     # create an instance of the atlas (will be used to convert data to nifti)
-    atlas, a_info = am.get_atlas(atlas_space,atlas_dir)
+    atlas, a_info = am.get_atlas(atlas_space,gl.atlas_dir)
     nifti_img = atlas.data_to_nifti(1*thresh_data)
     return nifti_img
 
@@ -367,3 +367,15 @@ def make_roi_cortex(cifti_img, info, threshold, localizer = "Verbal2Back"):
         # create label gifti
         gifti_img.append(nt.make_label_gifti(1*thresh_data.T, anatomical_struct=name))
     return gifti_img
+
+
+
+
+
+
+if __name__ == "__main__":
+
+    df=get_summary(dataset='IBC', ses_id= 'ses-rsvplanguage', type='CondHalf',cerebellum_roi='tpl-SUIT/atl-speech-half1_space-SUIT', cortex_roi='tpl-fs32k/speech-half1.32k')
+    print(df)
+
+    df_r= run_regress(df, fit_intercept= True)

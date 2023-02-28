@@ -13,3 +13,4 @@ if not Path(conn_dir).exists():
     conn_dir = '/cifs/diedrichsen/data/Cerebellum/connectivity'
 
 atlas_dir = base_dir + '/Atlases'
+atlas_lang = '/cifs/diedrichsen/data/Cerebellum/Language/atlases'

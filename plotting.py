@@ -1,8 +1,13 @@
 import os
 import numpy as np
 import seaborn as sns # for plots
+import nibabel as nb
+import nitools as nt
+import selective_recruitment.globals as gl
+from matplotlib.colors import LinearSegmentedColormap
 import pandas as pd
 from pathlib import Path
+from SUITPy import flatmap
 import matplotlib.pyplot as plt
 from scipy import stats as sps # to calcualte confidence intervals, etc
 from adjustText import adjust_text # to adjust the text labels in the plots (pip install adjustText)
@@ -66,6 +71,43 @@ def annotate(dataframe, labels = 'cond_num', text_size = 'small', text_weight = 
 
     adjust_text(texts) # make sure you have installed adjust_text
 
+def plot_parcellation(parcellation, roi_name):
+    """
+    plot the selected region from parcellation on flatmap
+    Args:
+        parcellation (str) - name of the parcellation
+        roi_name (str) - name of the roi as stored in the lookup table
+    Return:
+        ax (axes object)
+        roi_num (int) - number corresponding to the region
+    """
+    fname = gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}_space-SUIT_dseg.nii'
+    img = nb.load(fname)
+    # map it from volume to surface
+    img_flat = flatmap.vol_to_surf([img], stats='mode', space = 'SUIT')
+
+    # get the lookuptable for the parcellation
+    lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}.lut')
+
+    # get the label info
+    label_info = lookuptable[2]
+    if '0' not in label_info:
+        # append a 0 to it
+        label_info.insert(0, '0')
+    cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
+
+    # get the index for the region
+    roi_num = label_info.index(roi_name)
+    roi_flat = img_flat.copy()
+    # convert non-selected labels to nan
+    roi_flat[roi_flat != float(roi_num)] = np.nan
+    # plot the roi
+    ax = flatmap.plot(roi_flat, render="plotly", 
+                      hover='auto', colorbar = False, 
+                      bordersize = 1.5, overlay_type='label', 
+                      label_names=label_info, cmap = cmap)
+
+    return ax, roi_num
 
 def make_scatterplot_depricated(dataframe, hue = "phase", style = "recall", label = "load", height = 4, aspect = 1):
     """

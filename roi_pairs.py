@@ -64,25 +64,16 @@ def get_summary_pair(dataset = 'IBC',
     return summary_1, summary_2
 
     
-def sim_summary_pair_n(x_min=-0.11380856779352279, x_max=0.04603078849976064,
-                     y_min=-0.10749953012802338, y_max=0.013798874028263913,
-                     slope1=1.0, slope2=1.0, seed_value=None):
+def sim_summary_pair_n(slope=1.0, seed_value=None):
     """
-    Simulate two dataframes with random data
+    Simulate a DataFrame with random data and a linear relationship between X and Y controlled by the slope
 
     Args:
-    x_min: min x value
-    x_max: max x value
-    y_min: min y value
-    y_max: max y value
-    slope1: slope of the linear relationship between X and Y in df1
-    slope2: slope of the linear relationship between X and Y in df2
-    same_data: whether to generate the same data for both dataframes
+    slope: slope of the linear relationship between X and Y
     seed_value: seed for the random generator (default: None)
 
     Returns:
-    df1: DataFrame containing simulated data for dataset 1
-    df2: DataFrame containing simulated data for dataset 2
+    df: DataFrame containing simulated data
     """
     # Set seed of randomness
     np.random.seed(seed_value)
@@ -92,33 +83,25 @@ def sim_summary_pair_n(x_min=-0.11380856779352279, x_max=0.04603078849976064,
     conditions = ['word_list', 'psuedoword_list', 'simple_sentence', 'complex_sentence',
                   'consonant_string', 'jabberwocky']
 
-    # Create empty dataframes
-    df1 = pd.DataFrame(columns=['sn', 'cond_name', 'X', 'Y', 'roi'])
-    df2 = pd.DataFrame(columns=['sn', 'cond_name', 'X', 'Y', 'roi'])
+    # Define mean and variance for X
+    mx = np.mean(np.random.uniform(size=1000))
+    vx = np.var(np.random.uniform(size=1000))
 
-    mx1 = mx1
-    my1 = my1
+    # Define mean and variance for Y
+    my = slope * mx
+    vy = np.var(np.random.uniform(size=1000))
 
-    mx2 = mx2
-    my2 = my2
-    
-    mx1=my1*slope1
-    mx2=my2*slope2
+    # Create empty dataframe
+    df = pd.DataFrame(columns=['sn', 'cond_name', 'X', 'Y', 'roi'])
 
-    # Fill dataframes with simulated data
-    for sn in subjects:
+    # Fill dataframe with simulated data
+    for subject in subjects:
         for condition in conditions:
-            x1 = mx1 + np.random.uniform(x_min, x_max)
-            y1 = my1 + np.random.uniform(y_min, y_max)
-            x2 = mx2 + np.random.uniform(x_min, x_max)
-            y2 = my2 + np.random.uniform(y_min, y_max)
+            x = mx + np.random.normal(scale=np.sqrt(vx))
+            y = my + np.random.normal(scale=np.sqrt(vy))
+            df = df.append({'sn': subject, 'cond_name': condition, 'X': x, 'Y': y ,'roi':0.0}, ignore_index=True)
 
-            df1 = df1.append({'sn': sn, 'cond_name': condition, 'X': x1, 'Y': y1, 'roi': 0.0},
-                             ignore_index=True)
-            df2 = df2.append({'sn': sn, 'cond_name': condition, 'X': x2, 'Y': y2, 'roi': 0.0},
-                             ignore_index=True)
-
-    return df1, df2
+    return df
 
 
 

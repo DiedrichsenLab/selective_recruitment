@@ -299,6 +299,23 @@ def run_regress(df,fit_intercept = False):
             df.loc[indx,'R2']= R2 * vec
     return df
 
+def threshold_map(map_data, threshold, binarize = False):
+    """applies threshold (in percent) to the data
+
+    Args:
+        data (np.ndarray): data to be thresholded
+        threshold (fload): threshold (in percecnt) to be applied
+    Returns:
+        data_thresh (np.ndarray): thresholded data
+    """
+    # get threshold value (ignoring nans)
+    percentile_value = np.nanpercentile(map_data, q=threshold)
+
+    # apply threshold
+    map_thresholded = map_data > percentile_value
+    if not binarize:
+        map_thresholded = map_data[map_thresholded]  
+    return map_thresholded
 
 def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", localizer = "Verbal2Back"):
     """

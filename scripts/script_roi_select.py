@@ -151,7 +151,7 @@ def make_roi_label(dataset_name = "MDTB",
 
     # label files for the cerebellum and cortex
     roi_nifti = make_roi_cerebellum(cifti_cerebellum, info_tsv, threshold, atlas_space = "SUIT3", condition_1 = "non_speech-half1",condition_2='y')
-    roi_gifti = make_roi_cortex(cifti_cortex, info_tsv, threshold, condition_1 = "x",condition_2='y')
+    roi_gifti = make_roi_cortex(cifti_cortex, info_tsv, threshold, condition_1 = "non_speech-half1",condition_2='y')
 
     if condition_2 != 'y':
         # save the nifti image
@@ -159,7 +159,7 @@ def make_roi_label(dataset_name = "MDTB",
         
         # save label gifti images
         for i, h in enumerate(['L', 'R']):
-            nb.save(roi_gifti[i], save_dir + '/tpl-fs32k' + f'/vertical-{condition_1}_vs_{condition_2}.32k.{h}.label.gii')
+            nb.save(roi_gifti[i], save_dir + '/tpl-fs32k' + f'/{condition_1}_vs_{condition_2}.32k.{h}.label.gii')
 
     else: 
         # save the nifti image
@@ -191,6 +191,7 @@ if __name__ == "__main__":
 
 
     make_roi_label(dataset_name = "IBC", 
-                   condition_1 = "non_speech-half1",    
+                   condition_1 = "non_speech-half1",
+                   condition_2= 'speech-half1' ,   
                    ses_id = "ses-archi", 
                    threshold = 80)

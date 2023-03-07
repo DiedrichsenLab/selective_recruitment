@@ -64,63 +64,6 @@ def get_summary_pair(dataset = 'IBC',
     return summary_1, summary_2
 
     
-
-
-
-def sim_summary_pair(x_min=-0.11380856779352279, x_max=0.04603078849976064,
-                    y_min=-0.10749953012802338, y_max=0.013798874028263913,
-                    seed_value=None):
-    """
-    Simulate two dataframes with random data
-
-    Args:
-    x_min: min x value
-    x_max: max x value
-    y_min: min y value
-    y_max: max y value
-    scale_x1: scaling factor for df1 x
-    scale_x2: scaling factor for df2 x
-    scale_y1: scaling factor for df1 y
-    scale_y2: scaling factor for df2 y
-    seed_value: seed for the random generator (default: None)
-
-    Returns:
-    df1: DataFrame containing simulated data for dataset 1
-    df2: DataFrame containing simulated data for dataset 2
-    """
-    # Set seed of randomness
-    np.random.seed(seed_value)
-
-    # Define subjects and conditions
-    subjects = np.arange(13)
-    conditions = ['word_list', 'psuedoword_list', 'simple_sentence', 'complex_sentence',
-                  'consonant_string', 'jabberwocky']
-
-    # Create empty dataframes
-    df1 = pd.DataFrame(columns=['sn', 'cond_name', 'X', 'Y', 'roi'])
-    df2 = pd.DataFrame(columns=['sn', 'cond_name', 'X', 'Y', 'roi'])
-
-    # Fill dataframes with simulated data
-    for sn in subjects:
-        for condition in conditions:
-            x1 = np.random.uniform(x_min, x_max)
-            x2 = np.random.uniform(x_min, x_max)
-            y1 = np.random.uniform(y_min, y_max)
-            y2 = np.random.uniform(y_min, y_max)
-
-            # Scale the X and Y values based on input scaling factors
-            x_scaled_1 = x1 
-            x_scaled_2 = x2 
-            y_scaled_1 = y1 
-            y_scaled_2 = y2 
-
-            df1 = df1.append({'sn': sn, 'cond_name': condition, 'X': x_scaled_1, 'Y': y_scaled_1, 'roi': 0.0},
-                             ignore_index=True)
-            df2 = df2.append({'sn': sn, 'cond_name': condition, 'X': x_scaled_2, 'Y': y_scaled_2, 'roi': 0.0},
-                             ignore_index=True)
-
-    return df1, df2
-
 def sim_summary_pair_n(x_min=-0.11380856779352279, x_max=0.04603078849976064,
                      y_min=-0.10749953012802338, y_max=0.013798874028263913,
                      slope1=1.0, slope2=1.0, seed_value=None):
@@ -162,8 +105,6 @@ def sim_summary_pair_n(x_min=-0.11380856779352279, x_max=0.04603078849976064,
     mx1=my1*slope1
     mx2=my2*slope2
 
-
-
     # Fill dataframes with simulated data
     for sn in subjects:
         for condition in conditions:
@@ -178,8 +119,6 @@ def sim_summary_pair_n(x_min=-0.11380856779352279, x_max=0.04603078849976064,
                              ignore_index=True)
 
     return df1, df2
-
-
 
 
 

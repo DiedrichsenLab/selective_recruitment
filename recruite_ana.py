@@ -375,7 +375,7 @@ def make_roi_cortex(cifti_img, info, threshold, localizer = "Verbal2Back"):
 
 if __name__ == "__main__":
 
-    df=get_summary(dataset='IBC', ses_id= 'ses-rsvplanguage', type='CondHalf',cerebellum_roi='tpl-SUIT/atl-speech-half1_space-SUIT', cortex_roi='tpl-fs32k/speech-half1.32k')
+    df=get_summary(dataset='IBC', ses_id= 'ses-rsvplanguage', type='CondHalf',cerebellum_roi='tpl-SUIT/atl-ff_langLR_space-SUIT', cortex_roi='tpl-fs32k/ff_lang.32k')
     print(df)
 
     df_r= run_regress(df, fit_intercept= True)

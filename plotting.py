@@ -228,13 +228,6 @@ def make_scatterplots_shift(dataframe_1,dataframe_2, type = 'cerebellum', split=
         df_1 = grouped_1.agg(agg_kw)
         df_2 = grouped_2.agg(agg_kw)
 
-        # df_1["1_Y_CI"] = grouped_1.Y.apply(sps.sem) * 1.96
-        # df_1["1_X_CI"] = grouped_1.X.apply(sps.sem)*1.96
-        
-        # df_2["2_Y_CI"] = grouped_2.Y.apply(sps.sem) * 1.96
-        # df_2["2_X_CI"] = grouped_2.X.apply(sps.sem)*1.96
-
-
         if type == 'cortex':
             # ax.errorbar(x = df_1['X'], 
             #      y = df_2['X'],
@@ -248,7 +241,7 @@ def make_scatterplots_shift(dataframe_1,dataframe_2, type = 'cerebellum', split=
         
             # Make scatterplot, determining the markers and colors from the dictionary 
             ax = sns.scatterplot (x=df_1['X'], y=df_2['X'], style = df_1[split], hue = df_1[split], s = 100,legend= True,markers=markers,palette=colors, ax=ax)
-
+            
             # set labels
             ax.set_xlabel('Language ROI activation (a.u.)')
             ax.set_ylabel('Multi-Demand ROI activation (a.u.)')

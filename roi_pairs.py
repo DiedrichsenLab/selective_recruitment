@@ -75,26 +75,26 @@ def sim_summary_pair_n(slope=1.0, seed_value=None):
     Returns:
     df: DataFrame containing simulated data
     """
-    # Set seed of randomness
+    #  seed of randomness
     np.random.seed(seed_value)
 
-    # Define subjects and conditions
+    # define subjects and conditions
     subjects = np.arange(13)
     conditions = ['word_list', 'psuedoword_list', 'simple_sentence', 'complex_sentence',
                   'consonant_string', 'jabberwocky']
 
-    # Define mean and variance for X
+    #define mean and variance for X
     mx = np.mean(np.random.uniform(size=1000))
     vx = np.var(np.random.uniform(size=1000))
 
-    # Define mean and variance for Y
+    # define mean and variance for Y
     my = slope * mx
     vy = np.var(np.random.uniform(size=1000))
 
-    # Create empty dataframe
+    # create empty dataframe
     df = pd.DataFrame(columns=['sn', 'cond_name', 'X', 'Y', 'roi'])
 
-    # Fill dataframe with simulated data
+    # fill dataframe with simulated data
     for subject in subjects:
         for condition in conditions:
             x = mx + np.random.normal(scale=np.sqrt(vx))

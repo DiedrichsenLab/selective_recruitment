@@ -279,6 +279,52 @@ def regressXY(X, Y, fit_intercept = False):
 
     return coef, residual, R2
 
+def pcaXY(X, Y, zero_mean = False, n_components = 1):
+    """
+    Applies PCA
+    """
+    if zero_mean:
+        X = X - X.mean(axis = 1, keepdims = True)
+        Y = Y - Y.mean(axis = 1, keepdims = True)
+
+    # calculate covariance
+    XX = np.concatenate([X, Y], axis = 1)
+
+    cov = np.cov(XX.T)
+    print("Covariance matrix ", cov.shape, "\n")
+
+    # compute eigen vectors of the covariance
+    eig_val, eig_vec = np.linalg.eig(cov)
+    print("Eigen vectors ", eig_vec)
+    print("Eigen values ", eig_val, "\n")
+
+    # sort eigen vectors and eigen values
+    idx = np.arange(0,len(eig_val), 1)
+    idx = ([x for _,x in sorted(zip(eig_val, idx))])[::-1]
+    eig_val = eig_val[idx]
+    eig_vec = eig_vec[:,idx]
+
+    # calculate variance explained
+    sum_eig_val = np.sum(eig_val)
+    explained_variance = eig_val/ sum_eig_val
+    print(explained_variance)
+    cumulative_variance = np.cumsum(explained_variance)
+    print(cumulative_variance)
+
+    # project data onto first component
+    pca_data = np.dot(XX, eig_vec[1:n_components, :])
+
+    # reconstruct data
+    recon_data = pca_data.dot(eig_vec.T) + np.mean(XX, axis= 0)
+
+    # calculate residuals
+    residual = recon_data - XX
+
+    # calculate resconstruction loss
+    R2 = np.mean(np.square(residual))
+    print("Reconstruction loss ", R2)
+    return eig_vec[1:n_components, :], residual, R2
+
 def run_regress(df,fit_intercept = False):
     """ Runs regression analysis for each subject and ROI. 
     Args:

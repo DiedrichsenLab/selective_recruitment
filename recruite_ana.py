@@ -257,14 +257,15 @@ def regressXY(X, Y, fit_intercept = False):
     regresses Y onto X.
     Will be used to regress observed cerebellar data onto predicted
     Args:
-        X (np.ndarray) - predicted cerebellar data for each roi
-        Y (np.ndarray) - observed cerebellar data for each roi
+        X (np.ndarray) - predicted cerebellar data for a single roi (vector)
+        Y (np.ndarray) - observed cerebellar data for a single roi (vector)
         subtract_mean (boolean) - subtract mean before regression?
     Returns:
         coef (np.ndarray) - regression coefficients
         residual (np.ndarray) - residuals 
         R2 (float) - R2 of the regression fit
     """
+    # Check that X and Y are one-dim
     if fit_intercept:
         X = np.c_[ np.ones(X.shape[0]), X ]  
 
@@ -279,55 +280,53 @@ def regressXY(X, Y, fit_intercept = False):
 
     return coef, residual, R2
 
-def pcaXY(X, Y, zero_mean = False, n_components = 1):
+def pcaXY(X, Y, zero_mean = False):
     """
     Applies PCA
     """
+    # Check that X and Y are one-dim
+    
+    # Subtract mean 
     if zero_mean:
-        X = X - X.mean(axis = 0, keepdims = True)
-        Y = Y - Y.mean(axis = 0, keepdims = True)
+        X = X - X.mean()
+        Y = Y - Y.mean()
 
     # calculate covariance
-    XX = np.concatenate([X, Y], axis = 1)
+    XX = np.c_[X, Y]
 
     cov = XX.T@XX
-    print("Covariance matrix ", cov.shape, "\n")
-
     # compute eigen vectors of the covariance
     eig_val, eig_vec = np.linalg.eig(cov)
-    print("Eigen vectors ", eig_vec)
-    print("Eigen values ", eig_val, "\n")
 
-    # sort eigen vectors and eigen values
-    idx = np.arange(0,len(eig_val), 1)
-    idx = ([x for _,x in sorted(zip(eig_val, idx))])[::-1]
-    eig_val = eig_val[idx]
-    eig_vec = eig_vec[:,idx]
-
-    # calculate variance explained
-    sum_eig_val = np.sum(eig_val)
-    explained_variance = eig_val/ sum_eig_val
-    print(explained_variance)
-    cumulative_variance = np.cumsum(explained_variance)
-    print(cumulative_variance)
-
-    # project data onto first component
-    pca_data = np.dot(XX, eig_vec[:,:n_components])
+    # sort eigen vectors  by the general direction
+    # The first one must go into the ++ or -- quadrant 
+    # The second one into the -+ or +- quadrant 
+    S=np.sign(eig_vec)
+    quad_type = S[0]*S[1]  # Quadrant type
+    if quad_type[0]==-1:
+        eig_vec=eig_vec[:,[1,0]]
+        eig_val=eig_val[1,0]
+    elif quad_type[0]==0: 
+        raise(NameError('Crazy - X and Y are completely unrelated'))
+    
+    # Flip the eigenvectors in the right direction 
+    S=np.sign(eig_vec)
+    eig_vec = eig_vec * S[1,:].reshape(1,2)
+    slope = eig_vec[1,0]/eig_vec[0,0]
+    if zero_mean:
+        intercept = slope * X.mean()
+    else:
+        intercept = 0
 
     # reconstruct data
-    recon_data = pca_data.dot(eig_vec[:, :n_components].T) + np.mean(XX, axis= 0)
+    # recon_data = np.outer(eig_vec[:,0],XX @ eig_vec[:,0]).T
 
     # calculate residuals
-    residual = XX - recon_data
+    residual = XX @ eig_vec[:,1].T
+    coef = [intercept,slope]
+    return coef,residual, eig_val,eig_vec
 
-    # calculate resconstruction loss
-    rss = sum(residual**2)
-    tss = sum((Y - np.mean(Y))**2)
-    R2 = 1 - rss/tss
-    print("Reconstruction loss ", R2)
-    return eig_vec[1:n_components, :], residual, R2
-
-def run_pca(df, zero_mean = True, n_components = 2):
+def run_pca(df, zero_mean = True):
     subjs = np.unique(df.sn)
     rois = np.unique(df.roi)
     df['slope']=[0]*len(df)
@@ -338,13 +337,13 @@ def run_pca(df, zero_mean = True, n_components = 2):
         for r in rois:
             indx = (df.sn==s) & (df.roi==r)
 
-            eig, res, R2 = pcaXY(df.X[indx].to_numpy().reshape(-1, 1),
-                                      df.Y[indx].to_numpy().reshape(-1, 1), 
-                                     zero_mean=zero_mean, 
-                                     n_components=n_components)
+            eig, res = pcaXY(df.X[indx].to_numpy(),
+                                      df.Y[indx].to_numpy(), 
+                                     zero_mean=zero_mean)
             vec = np.ones(res.shape)
             df.loc[indx,'res'] = res
-            # df.loc[indx,'slope'] = coef[-1] * vec
+            df.loc[indx,'slope'] = 
+            
             # if fit_intercept:
             #     df.loc[indx,'intercept'] = coef[0] * vec
             df.loc[indx,'R2']= R2 * vec
@@ -474,6 +473,6 @@ if __name__ == "__main__":
                 cortex_roi = None,
                 add_rest = True)
 
-    DD = run_pca(D, zero_mean = True, n_components = 2)
+    DD = run_pca(D, zero_mean = True)
 
     

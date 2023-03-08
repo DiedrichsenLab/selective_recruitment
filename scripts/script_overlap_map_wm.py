@@ -10,7 +10,6 @@ Author: Ladan Shahshahani
 import numpy as np
 import pandas as pd
 from pathlib import Path
-
 # modules from functional fusion
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
@@ -130,7 +129,7 @@ def plot_overlap_cerebellum(dataset = 'WMFS',
                                             label_names= ["none", "load", "recall", "overlap"],
                                             label_RGBA=[[0, 0, 0, 0], [0, 0, 1, 1], [1, 0, 0, 1], [1, 0, 1, 1]]
                                             )
-            # nb.save(flat_gii, gl.atlas_dir + f'/tpl-SUIT/overlap_load_recall_{phase}.label.gii')
+            nb.save(flat_gii, gl.atlas_dir + f'/tpl-SUIT/overlap_load_recall_{phase}.label.gii')
             
         else:
             print("NOT IMPLEMENTED YET")
@@ -199,14 +198,22 @@ def plot_overlap_cortex(dataset = 'WMFS',
                 ## 3 - only recall 
                 ## 5 - both load and recall
                 overlap_map = thresh_recall + thresh_load
+                # create label gifti
                 gii = nt.make_label_gifti(overlap_map.T, 
                                           anatomical_struct=name,
                                           label_names= ["none", "load", "recall", "overlap"],
                                           label_RGBA=[[0, 0, 0, 0], [0, 0, 1, 1], [1, 0, 0, 1], [1, 0, 1, 1]]
                                           )
-                
-                # create label gifti
                 gifti_img.append(gii)
+                
             else:
                 print("NOT IMPLEMENTED YET")
+                
+    # save gifti
+    for g, hemi in enumerate(['L', 'R']):
+        nb.save(gifti_img[g], gl.atlas_dir + f'/tpl-fs32k/overlap_load_recall_{phase}.{hemi}.label.gii')
     return gifti_img
+
+if __name__=="__main__":
+    plot_overlap_cerebellum()
+    plot_overlap_cortex()

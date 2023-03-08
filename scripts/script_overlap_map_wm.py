@@ -43,23 +43,22 @@ def get_contrast(data, info):
     ## get the index for effect condition
     idx_effect_load = info.load == 6
     ## load effect
-    data_load = data[idx_effect_load, :]/np.sum(idx_effect_load) - data[idx_base_load, :]/np.sum(idx_base_load)
+    data_load = np.nanmean(data[idx_effect_load, :], axis = 0) - np.nanmean(data[idx_base_load, :], axis = 0)
     
     # calculate the effect of recall direction
     ## get the index for baseline condition
-    idx_base_recall = info.recall == 0
+    idx_base_recall = info.recall == 1
     ## get the index for effect condition
-    idx_effect_recall = info.recall == 1
+    idx_effect_recall = info.recall == 0
     ## recall effect
-    data_recall = data[idx_effect_recall, :]/np.sum(idx_effect_recall) - data[idx_base_recall]/np.sum(idx_base_recall)
-    
+    data_recall = np.nanmean(data[idx_effect_recall, :], axis = 0) - np.nanmean(data[idx_base_recall, :], axis = 0)
     return data_load, data_recall
 
 def plot_overlap_cerebellum(dataset = 'WMFS', 
                             type = 'CondAll',
-                            ses_id = 'ses_02',
+                            ses_id = 'ses-02',
                             subject = "group",
-                            atlas = 'SUIT3', 
+                            atlas_space = 'SUIT3', 
                             threshold = 80, 
                             binarize = True,
                             ):
@@ -77,11 +76,18 @@ def plot_overlap_cerebellum(dataset = 'WMFS',
     Data = ds.get_dataset_class(gl.base_dir, dataset=dataset)
     
     # load data 
-    cifti_file = nb.load(Data.data_dir.format(subject) + f"/group_space-{atlas}_{ses_id}_{type}.dscalar.nii")
+    cifti_file = nb.load(Data.data_dir.format(subject) + f"/group_space-{atlas_space}_{ses_id}_{type}.dscalar.nii")
     cifti_data = cifti_file.get_fdata()
     # load info (will be used to select and calculate contrasts)
     info_tsv = pd.read_csv(Data.data_dir.format(subject) + f"/group_{ses_id}_info-{type}.tsv", sep="\t")
+    
+    # smoothing with kernel 3
+    atlas, a_info = am.get_atlas(atlas_space,gl.atlas_dir)
+    # smat = ra.get_smooth_matrix(atlas, fwhm =3)
 
+    # # smooth data
+    # cifti_data = cifti_data@smat
+    
     # loop over phases
     for p, phase in enumerate(["Enc", "Ret", "overall"]):
         # get the index for the phase
@@ -116,7 +122,7 @@ def plot_overlap_cerebellum(dataset = 'WMFS',
             
             # save the label file
             # create an instance of the atlas (will be used to convert data to nifti)
-            atlas, a_info = am.get_atlas(atlas,gl.atlas_dir)
+            
             nifti_img = atlas.data_to_nifti(overlap_map)
             ## save the nifti image
             nb.save(nifti_img, gl.atlas_dir + f"/tpl-SUIT/overlap_load_recall_{phase}.SUIT.nii")
@@ -124,7 +130,7 @@ def plot_overlap_cerebellum(dataset = 'WMFS',
             img_flat = flatmap.vol_to_surf(nifti_img, space="SUIT", stats="mode")
             
             flat_gii = nt.make_label_gifti(
-                                            img_flat,
+                                            img_flat.astype(int),
                                             anatomical_struct='Cerebellum',
                                             label_names= ["none", "load", "recall", "overlap"],
                                             label_RGBA=[[0, 0, 0, 0], [0, 0, 1, 1], [1, 0, 0, 1], [1, 0, 1, 1]]
@@ -137,9 +143,9 @@ def plot_overlap_cerebellum(dataset = 'WMFS',
 
 def plot_overlap_cortex(dataset = 'WMFS', 
                         type = 'CondAll',
-                        ses_id = 'ses_02',
+                        ses_id = 'ses-02',
                         subject = "group",
-                        atlas = 'fs32k', 
+                        atlas_space = 'fs32k', 
                         threshold = 80, 
                         binarize = True,
                         ):
@@ -157,27 +163,27 @@ def plot_overlap_cortex(dataset = 'WMFS',
     Data = ds.get_dataset_class(gl.base_dir, dataset=dataset)
     
     # load data 
-    cifti_file = nb.load(Data.data_dir.format(subject) + f"/group_space-{atlas}_{ses_id}_{type}.dscalar.nii")
+    cifti_file = nb.load(Data.data_dir.format(subject) + f"/group_space-{atlas_space}_{ses_id}_{type}.dscalar.nii")
     cifti_list = nt.surf_from_cifti(cifti_file)
     # load info (will be used to select and calculate contrasts)
     info_tsv = pd.read_csv(Data.data_dir.format(subject) + f"/group_{ses_id}_info-{type}.tsv", sep="\t")
     
-    # threshold and create label
-    gifti_img = []
-    for i, name in zip([0, 1], ['CortexLeft', 'CortexRight']):
-        # get data for the hemisphere
-        cifti_data = cifti_list[i]
-        
-        for p, phase in enumerate(["Enc", "Ret", "overall"]):
-            # get the index for the phase
-            if phase == "overall":
-                idx = True*np.ones([len(info_tsv,)], dtype=bool)
-            else:
-                idx = info_tsv.phase == p
-                
+    # get smoothing matrix
+    # atlas, a_info = am.get_atlas(atlas_space,gl.atlas_dir)
+    # smat = ra.get_smooth_matrix(atlas, fwhm =3)
+    
+    for p, phase in enumerate(["Enc", "Ret", "overall"]):
+        # get the index for the phase
+        if phase == "overall":
+            idx = True*np.ones([len(info_tsv,)], dtype=bool)
+        else:
+            idx = info_tsv.phase == p
+        gifti_img = []
+        for i, name in zip([0, 1], ['CortexLeft', 'CortexRight']):
+            # get data for the hemisphere
+            cifti_data = cifti_list[i]
             info = info_tsv.loc[idx]
             data = cifti_data[idx, :]
-            
             # get contrasts
             data_load, data_recall = get_contrast(data, info)
             
@@ -199,7 +205,7 @@ def plot_overlap_cortex(dataset = 'WMFS',
                 ## 5 - both load and recall
                 overlap_map = thresh_recall + thresh_load
                 # create label gifti
-                gii = nt.make_label_gifti(overlap_map.T, 
+                gii = nt.make_label_gifti(overlap_map.reshape(-1, 1), 
                                           anatomical_struct=name,
                                           label_names= ["none", "load", "recall", "overlap"],
                                           label_RGBA=[[0, 0, 0, 0], [0, 0, 1, 1], [1, 0, 0, 1], [1, 0, 1, 1]]
@@ -209,9 +215,9 @@ def plot_overlap_cortex(dataset = 'WMFS',
             else:
                 print("NOT IMPLEMENTED YET")
                 
-    # save gifti
-    for g, hemi in enumerate(['L', 'R']):
-        nb.save(gifti_img[g], gl.atlas_dir + f'/tpl-fs32k/overlap_load_recall_{phase}.{hemi}.label.gii')
+        # save gifti
+        for g, hemi in enumerate(['L', 'R']):
+            nb.save(gifti_img[g], gl.atlas_dir + f'/tpl-fs32k/overlap_load_recall_{phase}.{hemi}.label.gii')
     return gifti_img
 
 if __name__=="__main__":

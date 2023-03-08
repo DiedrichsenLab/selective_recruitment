@@ -38,7 +38,7 @@ def get_summary_pair(dataset = 'IBC',
     """
     # Get first dataframe 
     df1 = ra.get_summary(dataset= dataset, ses_id= ses_id,type=type, add_rest= False,
-                            cerebellum_roi=f'tpl-SUIT/atl-{roi_1}_space-SUIT', cortex_roi= f'tpl-fs32k/{roi_1}.32k')
+                            cerebellum_roi=f'tpl-SUIT/atl-{roi_1}_space-SUIT', cortex_roi= f'tpl-fs32k/{roi_1}.32k', add_rest = True)
 
     # Clean up first dataframe (IBC-speciifc)- make this function general
     df1_noprob = df1[df1['cond_name'] != 'probe']
@@ -50,7 +50,7 @@ def get_summary_pair(dataset = 'IBC',
 
     # Get second dataframe 
     df2 = ra.get_summary(dataset= dataset, ses_id= ses_id,type=type, add_rest= False,
-                            cerebellum_roi=f'tpl-SUIT/atl-{roi_2}_space-SUIT', cortex_roi= f'tpl-fs32k/{roi_2}.32k')
+                            cerebellum_roi=f'tpl-SUIT/atl-{roi_2}_space-SUIT', cortex_roi= f'tpl-fs32k/{roi_2}.32k', add_rest = True)
     
     # Clean up second dataframe (IBC-speciifc)- make this function general
     df2_noprob = df2[df2['cond_name'] != 'probe']

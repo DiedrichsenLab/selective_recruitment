@@ -284,13 +284,13 @@ def pcaXY(X, Y, zero_mean = False, n_components = 1):
     Applies PCA
     """
     if zero_mean:
-        X = X - X.mean(axis = 1, keepdims = True)
-        Y = Y - Y.mean(axis = 1, keepdims = True)
+        X = X - X.mean(axis = 0, keepdims = True)
+        Y = Y - Y.mean(axis = 0, keepdims = True)
 
     # calculate covariance
     XX = np.concatenate([X, Y], axis = 1)
 
-    cov = np.cov(XX.T)
+    cov = XX.T@XX
     print("Covariance matrix ", cov.shape, "\n")
 
     # compute eigen vectors of the covariance
@@ -312,18 +312,43 @@ def pcaXY(X, Y, zero_mean = False, n_components = 1):
     print(cumulative_variance)
 
     # project data onto first component
-    pca_data = np.dot(XX, eig_vec[1:n_components, :])
+    pca_data = np.dot(XX, eig_vec[:,:n_components])
 
     # reconstruct data
-    recon_data = pca_data.dot(eig_vec.T) + np.mean(XX, axis= 0)
+    recon_data = pca_data.dot(eig_vec[:, :n_components].T) + np.mean(XX, axis= 0)
 
     # calculate residuals
-    residual = recon_data - XX
+    residual = XX - recon_data
 
     # calculate resconstruction loss
-    R2 = np.mean(np.square(residual))
+    rss = sum(residual**2)
+    tss = sum((Y - np.mean(Y))**2)
+    R2 = 1 - rss/tss
     print("Reconstruction loss ", R2)
     return eig_vec[1:n_components, :], residual, R2
+
+def run_pca(df, zero_mean = True, n_components = 2):
+    subjs = np.unique(df.sn)
+    rois = np.unique(df.roi)
+    df['slope']=[0]*len(df)
+    df['intercept']=[0]*len(df)
+    df['R2']=[0]*len(df)
+    df['res']=[0]*len(df)
+    for s in subjs:
+        for r in rois:
+            indx = (df.sn==s) & (df.roi==r)
+
+            eig, res, R2 = pcaXY(df.X[indx].to_numpy().reshape(-1, 1),
+                                      df.Y[indx].to_numpy().reshape(-1, 1), 
+                                     zero_mean=zero_mean, 
+                                     n_components=n_components)
+            vec = np.ones(res.shape)
+            df.loc[indx,'res'] = res
+            # df.loc[indx,'slope'] = coef[-1] * vec
+            # if fit_intercept:
+            #     df.loc[indx,'intercept'] = coef[0] * vec
+            df.loc[indx,'R2']= R2 * vec
+    return df
 
 def run_regress(df,fit_intercept = False):
     """ Runs regression analysis for each subject and ROI. 
@@ -440,3 +465,15 @@ def make_roi_cortex(cifti_img, info, threshold, localizer = "Verbal2Back"):
         # create label gifti
         gifti_img.append(nt.make_label_gifti(1*thresh_data.T, anatomical_struct=name))
     return gifti_img
+
+if __name__ == "__main__":
+    D = get_summary(dataset = "WMFS", 
+                ses_id = 'ses-02', 
+                type = "CondAll", 
+                cerebellum_roi =None, 
+                cortex_roi = None,
+                add_rest = True)
+
+    DD = run_pca(D, zero_mean = True, n_components = 2)
+
+    

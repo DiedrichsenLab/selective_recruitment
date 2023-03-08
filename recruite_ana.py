@@ -22,6 +22,8 @@ import selective_recruitment.globals as gl
 import nibabel as nb
 import nitools as nt
 
+# TODO: smoothing on the surface
+
 
 # Get smoothing matrix, can be used to smooth the weights (for connectivity)
 def get_smooth_matrix(atlas, fwhm = 3):
@@ -32,15 +34,22 @@ def get_smooth_matrix(atlas, fwhm = 3):
         fwhm (float)  - fwhm of smoothing kernel
     Rerurns:
         smooth_mat (np.ndarray) - smoothing matrix
-    """
-    # get voxel coordinates
-    
+    """    
     
     # calculate euclidean distance
-    euc_dist = nt.euclidean_dist_sq(atlas.vox, atlas.vox)
-
-    smooth_mat = np.exp(-1/2 * euc_dist/(fwhm**2))
-    smooth_mat = smooth_mat /np.sum(smooth_mat, axis = 1);   
+    if hasattr(atlas, "vox"): # for cerebellum
+        euc_dist = nt.euclidean_dist_sq(atlas.vox, atlas.vox)
+        smooth_mat = np.exp(-1/2 * euc_dist/(fwhm**2))
+        smooth_mat = smooth_mat /np.sum(smooth_mat, axis = 1);  
+    elif hasattr(atlas, "vertex"): # for cortex
+        # get smoothing matrix for each hemi
+        smooth_mat = []
+        for h in [0, 1]:
+            euc_dist = nt.euclidean_dist_sq(atlas.vertex[h], atlas.vertex[h])
+            s_mat_hemi = np.exp(-1/2 * euc_dist/(fwhm**2))
+            s_mat_hemi = s_mat_hemi /np.sum(s_mat_hemi, axis = 1)
+            smooth_mat.append(s_mat_hemi)
+     
 
     return smooth_mat
 
@@ -146,6 +155,7 @@ def agg_data(tensor, atlas, label, unite_struct = True):
     data, parcel_labels = ds.agg_parcels(tensor , 
                                          atlas.label_vector, 
                                          fcn=np.nanmean)
+    
     return data, ainfo, parcel_labels
 
 def add_rest_to_data(X,Y,info):
@@ -298,6 +308,23 @@ def run_regress(df,fit_intercept = False):
             df.loc[indx,'R2']= R2 * vec
     return df
 
+def threshold_map(map_data, threshold, binarize = False):
+    """applies threshold (in percent) to the data
+
+    Args:
+        data (np.ndarray): data to be thresholded
+        threshold (fload): threshold (in percecnt) to be applied
+    Returns:
+        data_thresh (np.ndarray): thresholded data
+    """
+    # get threshold value (ignoring nans)
+    percentile_value = np.nanpercentile(map_data, q=threshold)
+
+    # apply threshold
+    map_thresholded = map_data > percentile_value
+    if not binarize:
+        map_thresholded = map_data[map_thresholded]  
+    return map_thresholded
 
 def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", localizer = "Verbal2Back"):
     """

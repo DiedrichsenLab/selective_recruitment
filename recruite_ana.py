@@ -344,7 +344,7 @@ def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", local
     thresh_data[thresh_data != False] = np.nan
 
     # create an instance of the atlas (will be used to convert data to nifti)
-    atlas, a_info = am.get_atlas(atlas_space,atlas_dir)
+    atlas, a_info = am.get_atlas(atlas_space,gl.atlas_dir)
     nifti_img = atlas.data_to_nifti(1*thresh_data)
     return nifti_img
 

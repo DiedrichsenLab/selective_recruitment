@@ -133,3 +133,4 @@ dmypy.json
 .vscode/extensions.json
 .vscode/launch.json
 .vscode/launch.json
+globals.py

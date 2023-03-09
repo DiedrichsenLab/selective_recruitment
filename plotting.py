@@ -81,10 +81,10 @@ def plot_parcellation(parcellation, roi_name):
         ax (axes object)
         roi_num (int) - number corresponding to the region
     """
-    # fname = gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}_space-SUIT_dseg.nii'
-    # img = nb.load(fname)
-    # # map it from volume to surface
-    # img_flat = flatmap.vol_to_surf([img], stats='mode', space = 'SUIT')
+    fname = gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}_space-SUIT_dseg.nii'
+    img = nb.load(fname)
+    # map it from volume to surface
+    img_flat = flatmap.vol_to_surf([img], stats='mode', space = 'SUIT')
 
     # get the lookuptable for the parcellation
     lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}.lut')
@@ -98,15 +98,14 @@ def plot_parcellation(parcellation, roi_name):
 
     # get the index for the region
     roi_num = label_info.index(roi_name)
-    ax = None
-    # roi_flat = img_flat.copy()
-    # # convert non-selected labels to nan
-    # roi_flat[roi_flat != float(roi_num)] = np.nan
-    # # plot the roi
-    # ax = flatmap.plot(roi_flat, render="plotly", 
-    #                   hover='auto', colorbar = False, 
-    #                   bordersize = 1.5, overlay_type='label', 
-    #                   label_names=label_info, cmap = cmap)
+    roi_flat = img_flat.copy()
+    # convert non-selected labels to nan
+    roi_flat[roi_flat != float(roi_num)] = np.nan
+    # plot the roi
+    ax = flatmap.plot(roi_flat, render="plotly", 
+                      hover='auto', colorbar = False, 
+                      bordersize = 1.5, overlay_type='label', 
+                      label_names=label_info, cmap = cmap)
 
     return ax, roi_num
 
@@ -151,7 +150,7 @@ def make_scatterplot_depricated(dataframe, hue = "phase", style = "recall", labe
     annotate(dataframe, text_size = 'small', text_weight = 'regular', labels = label)
     return
 
-def make_scatterplot(dataframe, split='cond_num', labels=None,
+def make_scatterplot(dataframe, split='cond_num', fit_line = True, labels=None,
         colors=None,markers=None):
     """
     make scatterplot
@@ -187,9 +186,10 @@ def make_scatterplot(dataframe, split='cond_num', labels=None,
                 )
 
     # Plot average regression line 
-    xrange = np.array([df['X'].min(),df['X'].max()])
-    ypred = xrange*df.slope.mean()+df.intercept.mean()
-    plt.plot(xrange,ypred,'k-')
+    if fit_line:
+        xrange = np.array([df['X'].min(),df['X'].max()])
+        ypred = xrange*df.slope.mean()+df.intercept.mean()
+        plt.plot(xrange,ypred,'k-')
 
     # Make scatterplot, determining the markers and colors from the dictionary 
     ax = sns.scatterplot(data=df, x='X', y='Y', style = split, hue = split, s = 100,legend=None,markers=markers,palette=colors)

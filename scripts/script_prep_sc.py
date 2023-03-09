@@ -98,11 +98,11 @@ def get_summary_conn(dataset = "WMFS",
 
 
 if __name__ == "__main__":
-
-    # print("connectivity for MDTB parcellation")
+    #####################################################
+    # print("connectivity for hierarchical parcellation: Regression")
     # D = get_summary_conn(dataset = "WMFS", 
     #                     ses_id = 'ses-02', 
-    #                     cerebellum_roi = "MDTB10", 
+    #                     cerebellum_roi = "NettekovenSym68c32", 
     #                     cortex_roi = "Icosahedron-1002_Sym.32k",
     #                     type = "CondHalf",
     #                     add_rest=True,  
@@ -114,13 +114,12 @@ if __name__ == "__main__":
     # # do regression
     # D = ra.run_regress(D,fit_intercept=True)
 
-    # D.to_csv(out_dir + '/ROI_MDTB10_conn.tsv',sep='\t')
-
+    # D.to_csv(out_dir + '/ROI_NettekovenSym68c32_conn_reg.tsv',sep='\t')
     #####################################################
-    print("connectivity for hierarchical parcellation")
+    print("connectivity for hierarchical parcellation: PCA")
     D = get_summary_conn(dataset = "WMFS", 
                         ses_id = 'ses-02', 
-                        cerebellum_roi = "NettekovenSym34", 
+                        cerebellum_roi = "NettekovenSym68c32", 
                         cortex_roi = "Icosahedron-1002_Sym.32k",
                         type = "CondHalf",
                         add_rest=True,  
@@ -130,46 +129,14 @@ if __name__ == "__main__":
                         conn_ses_id = "ses-s1")
 
     # do regression
-    D = ra.run_regress(D,fit_intercept=True)
+    D = ra.run_pca(D,zero_mean=True)
 
-    D.to_csv(out_dir + '/ROI_NettekovenSym34_conn.tsv',sep='\t')
+    D.to_csv(out_dir + '/ROI_NettekovenSym68c32_conn_pca.tsv',sep='\t')
 
-    ##############################################################
-    print("connectivity for ROI defined on verbal 2back task of MDTB")
-    D = get_summary_conn(dataset = "WMFS", 
-                        ses_id = 'ses-02', 
-                        cerebellum_roi = "Verbal2Back", 
-                        cortex_roi = "Icosahedron-1002_Sym.32k",
-                        type = "CondHalf",
-                        add_rest=True,  
-                        conn_dataset = "MDTB", 
-                        conn_method = "L2Regression", 
-                        log_alpha = 8, 
-                        conn_ses_id = "ses-s1")
 
-    # do regression
-    D = ra.run_regress(D,fit_intercept=True)
 
-    D.to_csv(out_dir + '/ROI_Verbal2Back_conn.tsv',sep='\t')
+    
 
-    ##########################################################
-    print("ROI-wise comparison for ROI defined on verbal 2back task of MDTB")
-    D = ra.get_summary(dataset = "WMFS", 
-                ses_id = 'ses-02', 
-                type = "CondAll", 
-                cerebellum_roi ='tpl-SUIT/atl-Verbal2Back_space-SUIT', 
-                cortex_roi = "tpl-fs32k/Verbal2Back.32k",
-                add_rest = True)
-    D = ra.run_regress(D,fit_intercept=True)
-    D.to_csv(out_dir + '/ROI_Verbal2back.tsv',sep='\t')
 
-    #########################################################
-    print("comparison for whole cerebellum vs whole cortex")
-    D = ra.get_summary(dataset = "WMFS", 
-                ses_id = 'ses-02', 
-                type = "CondAll", 
-                cerebellum_roi =None, 
-                cortex_roi = None,
-                add_rest = True)
-    D = ra.run_regress(D,fit_intercept=True)
-    D.to_csv(out_dir + '/ROI_whole.tsv',sep='\t')
+
+

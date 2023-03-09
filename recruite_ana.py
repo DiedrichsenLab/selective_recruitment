@@ -257,14 +257,15 @@ def regressXY(X, Y, fit_intercept = False):
     regresses Y onto X.
     Will be used to regress observed cerebellar data onto predicted
     Args:
-        X (np.ndarray) - predicted cerebellar data for each roi
-        Y (np.ndarray) - observed cerebellar data for each roi
+        X (1d array) - predicted cerebellar data (or cortical data) for a single roi (vector)
+        Y (1d array) - observed cerebellar data for a single roi (vector)
         subtract_mean (boolean) - subtract mean before regression?
     Returns:
         coef (np.ndarray) - regression coefficients
         residual (np.ndarray) - residuals 
         R2 (float) - R2 of the regression fit
     """
+    # Check that X and Y are one-dim
     if fit_intercept:
         X = np.c_[ np.ones(X.shape[0]), X ]  
 
@@ -278,6 +279,102 @@ def regressXY(X, Y, fit_intercept = False):
     R2 = 1 - rss/tss
 
     return coef, residual, R2
+
+def pcaXY(X, Y, zero_mean = False):
+    """
+    Applies PCA to X and Y
+    Args:
+        X (1d array) - predicted cerebellar data (or cortical data) for a single roi (vector)
+        Y (1d array) - predicted cerebellar data (or cortical data) for a single roi (vector)
+        zero_mean (bool) - zero center the data by subtracting the mean?
+    Returns:
+        coef (list) - list containing intercept and slope. coef[0] is the intercept
+        residual (np.ndarray) - residuals as defined by the distance to the component
+        eig_val (np.ndarray) - eigen values sorted according to quadrant criterion
+        eig_vec (np.ndarray) - eigen vectors sorted according to quadrant criterion
+    """
+    # Check that X and Y are one-dim
+    
+    # Subtract mean 
+    if zero_mean:
+        X = X - X.mean()
+        Y = Y - Y.mean()
+
+    # calculate covariance
+    XX = np.c_[X, Y]
+    cov = XX.T@XX
+
+    # compute eigen vectors of the covariance
+    eig_val, eig_vec = np.linalg.eig(cov)
+
+    # sort eigen vectors by the general direction (not the magnitude of eigen value)
+    # The first one must go into the ++ or -- quadrant 
+    # The second one into the -+ or +- quadrant 
+    # get the sign of the eigen vectors (will be used to determine the quadrant)
+    vec_sign = np.sign(eig_vec)
+
+    # determine the quadrant 
+    quad_type = vec_sign[0]*vec_sign[1]
+    if quad_type[0]==-1:
+        eig_vec=eig_vec[:,[1,0]]
+        eig_val=[eig_val[1],eig_val[0]]
+    elif quad_type[0]==0: 
+        raise(NameError('Crazy - X and Y are completely unrelated'))
+    
+    # Sort eigen vactors: Flip the eigenvectors in the right direction 
+    # Assuming that observed cerebellar is on yaxis and cortical/predicted cerebellar is on xaxis, 
+    # ++ and -+ are what we are interested in 
+    vec_sign = np.sign(eig_vec)
+    eig_vec = eig_vec * vec_sign[1,:].reshape(1,2)
+
+    # getting the slope
+    slope = eig_vec[1,0]/eig_vec[0,0]
+    # print(slope)
+
+    # getting the intercept
+    if zero_mean:
+        intercept = slope * X.mean()
+    else:
+        intercept = 0
+
+    # calculate residuals from PCA
+    residual = XX @ eig_vec[:,1].T
+
+    # get intercept and slope into coef list
+    coef = [intercept,slope]
+    return coef,residual, eig_val, eig_vec
+
+def run_pca(df, zero_mean = False):
+    """ Runs pca analysis for each subject and ROI. 
+    Args:
+        df (DataFrame): Data frame with sn, roi, X & Y (get_summary) 
+        zero_mean (bool): subtract mean from data before pca?. Default = False
+    Returns:
+        df (DataFrame): resulting data frame
+    """
+    subjs = np.unique(df.sn)
+    rois = np.unique(df.roi)
+    df['slope']=[0]*len(df)
+    df['intercept']=[0]*len(df)
+    df['R2']=[0]*len(df)
+    df['res']=[0]*len(df)
+    for s in subjs:
+        for r in rois:
+            indx = (df.sn==s) & (df.roi==r)
+
+            coef,res, eig_val,eig_vec = pcaXY(df.X[indx].to_numpy(),
+                                              df.Y[indx].to_numpy(), 
+                                              zero_mean=zero_mean)
+            vec = np.ones(res.shape)
+            df.loc[indx,'res'] = res
+            df.loc[indx,'slope'] = coef[1]*vec
+            df.loc[indx, 'intercept'] = coef[0]*vec
+
+            # calculate rss
+            rss = eig_val[1]
+            # df.loc[indx,'R2']= R2 * vec
+
+    return df
 
 def run_regress(df,fit_intercept = False):
     """ Runs regression analysis for each subject and ROI. 
@@ -394,3 +491,17 @@ def make_roi_cortex(cifti_img, info, threshold, localizer = "Verbal2Back"):
         # create label gifti
         gifti_img.append(nt.make_label_gifti(1*thresh_data.T, anatomical_struct=name))
     return gifti_img
+
+if __name__ == "__main__":
+    D = get_summary(dataset = "WMFS", 
+                ses_id = 'ses-02', 
+                type = "CondAll", 
+                cerebellum_roi =None, 
+                cortex_roi = None,
+                add_rest = True)
+
+    DD = run_pca(D, zero_mean = True)
+
+
+
+    

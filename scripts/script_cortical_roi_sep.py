@@ -52,5 +52,5 @@ if __name__ == "__main__":
     save_dir = '/cifs/diedrichsen/data/Cerebellum/Language/atlases'
     model_path = '/cifs/diedrichsen/data/Cerebellum/connectivity/MDTB/train/Icosahedron-1002_Sym.32k_NettekovenSym68c32_L2Regression_8.dscalar.nii'
 
-    get_cortical_roi(model = model_path, startslice=22, endslice=26, threshold= 90,
-                    hemisphere='R',roi_name='md(D1-D4)_NettekovenSym68c32', save_dir= save_dir)
+    get_cortical_roi(model = model_path, startslice=6, endslice=10, threshold= 90,
+                    hemisphere='L',roi_name='md(D1L-D4L)_NettekovenSym68c32', save_dir= save_dir)

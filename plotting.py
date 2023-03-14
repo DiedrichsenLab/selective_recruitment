@@ -198,10 +198,10 @@ def make_scatterplot(dataframe, split='cond_num', labels=None,
     ax.set_ylabel('Cerebellar Activation (a.u.)')
 
     # get labels for each data point
-    annotate(df, 
-            text_size = 'small', 
-            text_weight = 'regular', 
-            labels = df[split].map(labels))
+    # annotate(df, 
+    #         text_size = 'small', 
+    #         text_weight = 'regular', 
+    #         labels = df[split].map(labels))
     return
             
 

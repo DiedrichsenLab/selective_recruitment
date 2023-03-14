@@ -56,7 +56,7 @@ def get_summary_pair(dataset = 'IBC',
     
     # Clean up second dataframe (IBC-speciifc)- make this function general
     df2_noprob = df2[df2['cond_name'] != 'probe']
-    df2_condall = df2_noprob.groupby(['sn', 'cond_name']).mean()
+    df2_condall = df1_noprob.groupby(['sn', 'cond_name']).mean()
     df2_condall = df2_condall.reset_index()
 
     # Run regression for second dataframe

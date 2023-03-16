@@ -416,11 +416,11 @@ def threshold_map(map_data, threshold, binarize = False):
     """
     # get threshold value (ignoring nans)
     percentile_value = np.nanpercentile(map_data, q=threshold)
-
     # apply threshold
-    map_thresholded = map_data > percentile_value
-    if not binarize:
-        map_thresholded = map_data[map_thresholded]  
+    map_thresholded = np.where(map_data< percentile_value, map_data, 0)
+    # map_thresholded = map_data >= percentile_value
+    if binarize:
+        map_thresholded = np.where(map_thresholded>=percentile_value, map_thresholded, 1)
     return map_thresholded
 
 def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", localizer = "Verbal2Back"):

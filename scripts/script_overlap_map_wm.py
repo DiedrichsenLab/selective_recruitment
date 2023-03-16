@@ -15,14 +15,16 @@ import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
 import selective_recruitment.globals as gl
 import selective_recruitment.recruite_ana as ra
+import cortico_cereb_connectivity.evaluation as ccev
 
 #
 import os
 import nibabel as nb
 import nitools as nt
 import SUITPy.flatmap as flatmap
+import scipy.stats as ss
 
-
+# TODO: use tesselations?
 def get_contrast(data, info):
     """calculates the contrasts for load and recall effect
 
@@ -136,11 +138,13 @@ def plot_overlap_cerebellum(dataset = 'WMFS',
                                             label_RGBA=[[0, 0, 0, 0], [0, 0, 1, 1], [1, 0, 0, 1], [1, 0, 1, 1]]
                                             )
             nb.save(flat_gii, gl.atlas_dir + f'/tpl-SUIT/overlap_load_recall_{phase}.label.gii')
+
+            return flat_gii
             
         else:
-            print("NOT IMPLEMENTED YET")
-    return flat_gii
-
+            print("returning thresholded maps")
+            return thresh_load, thresh_recall
+    
 def plot_overlap_cortex(dataset = 'WMFS', 
                         type = 'CondAll',
                         ses_id = 'ses-02',
@@ -179,6 +183,7 @@ def plot_overlap_cortex(dataset = 'WMFS',
         else:
             idx = info_tsv.phase == p
         gifti_img = []
+
         for i, name in zip([0, 1], ['CortexLeft', 'CortexRight']):
             # get data for the hemisphere
             cifti_data = cifti_list[i]
@@ -220,6 +225,98 @@ def plot_overlap_cortex(dataset = 'WMFS',
             nb.save(gifti_img[g], gl.atlas_dir + f'/tpl-fs32k/overlap_load_recall_{phase}.{hemi}.label.gii')
     return gifti_img
 
+def calculate_R(A, B):
+    """Calculates correlation between A and B without subtracting the mean.
+
+    Args:
+        A (nd-array):
+        B (nd-array):
+    Returns:
+        R (scalar): Correlation between A and B
+    """
+    SYP = np.nansum(A * B, axis=0)
+    SPP = np.nansum(B * B, axis=0)
+    SST = np.nansum(A ** 2, axis=0)  # use np.nanmean(Y) here?
+
+    R = np.nansum(SYP) / (np.sqrt(np.nansum(SST) * np.nansum(SPP)))
+    return R
+
+def overlap_corr(dataset = 'WMFS', 
+                            type = 'CondAll',
+                            ses_id = 'ses-02',
+                            subject = "group",
+                            atlas_space = 'SUIT3', 
+                            threshold = 80, 
+                            binarize = True,
+                            ):
+    """
+    quantifying the overlap between the two contrasts by calculating the overlap between maps
+    # TODO: on group, on each subject separately
+    """
+    # create a dataset class for the dataset
+    # get Dataset class for your dataset
+    Data = ds.get_dataset_class(gl.base_dir, dataset=dataset)
+    tensor = []
+    tensor_cerebellum, info_tsv, _ = ds.get_dataset(gl.base_dir,dataset,atlas="SUIT3",sess=ses_id,type=type, info_only=False)
+    tensor_cortex, info_tsv, _ = ds.get_dataset(gl.base_dir,dataset,atlas="fs32k",sess=ses_id,type=type, info_only=False)
+    
+    tensor.append(tensor_cerebellum)
+    tensor.append(tensor_cortex)
+    
+    # smoothing with kernel 3
+    atlas, a_info = am.get_atlas(atlas_space,gl.atlas_dir)
+    # smat = ra.get_smooth_matrix(atlas, fwhm =3)
+
+    # # smooth data
+    # cifti_data = cifti_data@smat
+    T = Data.get_participants()
+    
+    # loop over phases
+    DD = []
+    for i, sub in enumerate(T.participant_id):
+        for p, phase in enumerate(["Enc", "Ret", "overall"]):
+            # get the index for the phase
+            if phase == "overall":
+                idx = True*np.ones([len(info_tsv,)], dtype=bool)
+            else:
+                idx = info_tsv.phase == p
+                
+            info = info_tsv.loc[idx]
+
+            for ss, structure in enumerate(["cerebellum", "cortex"]):
+                data = tensor[ss][i, idx, :]
+                # get contrasts
+                data_load, data_recall = get_contrast(data, info)
+                
+                # threshold the data
+                thresh_load =ra.threshold_map(data_load, threshold, binarize = binarize)
+                thresh_recall =ra.threshold_map(data_recall, threshold, binarize = binarize)
+
+                # calculate correlations 
+                R = calculate_R(thresh_load, thresh_recall)
+                R_dict = {}
+                R_dict["dataset"] = dataset
+                R_dict["ses_id"] =ses_id
+                R_dict["phase"] = phase
+                R_dict["structure"] = structure
+                R_dict["R"] = R
+                R_dict["sn"] = sub
+                R_df = pd.DataFrame(R_dict, index = [0])
+
+                DD.append(R_df)
+    return pd.concat(DD)
+
 if __name__=="__main__":
     plot_overlap_cerebellum()
     plot_overlap_cortex()
+    df = overlap_corr_cerebellum(dataset = 'WMFS', 
+                            type = 'CondAll',
+                            ses_id = 'ses-02',
+                            subject = "group",
+                            atlas_space = 'SUIT3', 
+                            threshold = 80, 
+                            binarize = False,
+                            )
+
+
+    # print("hello")

@@ -10,6 +10,9 @@ Author: Ladan Shahshahani
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import sys
+import os
+import subprocess
 
 # modules from functional fusion
 import Functional_Fusion.atlas_map as am
@@ -21,9 +24,6 @@ import selective_recruitment.globals as gl
 
 import nibabel as nb
 import nitools as nt
-
-# TODO: smoothing on the surface
-
 
 # Get smoothing matrix, can be used to smooth the weights (for connectivity)
 def get_smooth_matrix(atlas, fwhm = 3):
@@ -127,7 +127,6 @@ def predict_cerebellum(weights, scale, X, atlas, info, fwhm = 0):
         Yhat[i, :, :] = np.dot(x, weights.T)
         Yhat[i, :, :] = np.r_[Yhat[i, info.half == 2, :], Yhat[i, info.half == 1, :]]
     return Yhat
-
 
 def agg_data(tensor, atlas, label, unite_struct = True):
     """
@@ -454,7 +453,6 @@ def make_roi_cerebellum(cifti_img, info, threshold, atlas_space = "SUIT3", local
     nifti_img = atlas.data_to_nifti(1*thresh_data)
     return nifti_img
 
-# make cortical roi
 def make_roi_cortex(cifti_img, info, threshold, localizer = "Verbal2Back"):
     """
     creates label giftis for left and right hemisphere of the cortex

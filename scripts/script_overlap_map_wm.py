@@ -17,6 +17,9 @@ import Functional_Fusion.dataset as ds
 import selective_recruitment.globals as gl
 import selective_recruitment.recruite_ana as ra
 import cortico_cereb_connectivity.evaluation as ccev
+import SUITPy as suit
+import surfAnalysisPy as sa
+import matplotlib.pyplot as plt 
 from scipy.stats import norm, ttest_1samp
 
 #
@@ -25,11 +28,14 @@ import nibabel as nb
 from nilearn import plotting
 import nitools as nt
 import SUITPy.flatmap as flatmap
+from nilearn import plotting
 import scipy.stats as ss
+
+# TODO: smooth the cortical and cerebellar maps before getting the overlap/effects
 
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
-def get_contrast(data, info):
+def calc_contrast(data, info):
     """calculates the contrasts for load and recall effect
 
     Args:
@@ -58,41 +64,80 @@ def get_contrast(data, info):
     idx_effect_recall = info.recall == 0
     ## recall effect
     data_recall = np.nanmean(data[idx_effect_recall, :], axis = 0) - np.nanmean(data[idx_base_recall, :], axis = 0)
-    
-    data_effect = np.concatenate([data_load.reshape(-1, 1).T, data_recall.reshape(-1, 1).T], axis = 0)
-    return data_effect
+    return data_load, data_recall
 
-def calculate_R(A, B):
-    """Calculates correlation between A and B without subtracting the mean.
-
-    Args:
-        A (nd-array):
-        B (nd-array):
-    Returns:
-        R (scalar): Correlation between A and B
+def load_contrast(ses_id = 'ses-02',
+                subj = "group",atlas_space='SUIT3',
+                phase=0):
     """
-    SYP = np.nansum(A * B, axis=0)
-    SPP = np.nansum(B * B, axis=0)
-    SST = np.nansum(A * A, axis=0)  # use np.nanmean(Y) here?
+    1. Gets group data 
+    2. Calculates the desired contrast (uses the info file to get conditions)
+    """    
+    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas=atlas_space,
+                                    sess=ses_id,
+                                    subj=subj)
+    data = data[0]
 
-    R = np.nansum(SYP) / (np.sqrt(np.nansum(SST) * np.nansum(SPP)))
-    # print()
-    # R_vox = SYP / np.sqrt(SST * SPP)  # per voxel
-
-    return R
-
-def make_label_suit(map, atlas):
-    nifti_img = atlas.data_to_nifti(map)
-    # convert to flatmap to be saved as label.gii
-    img_flat = flatmap.vol_to_surf(nifti_img, space="SUIT", stats="mode")
+    # loop over phases
+    if phase == "overall":
+        idx = True*np.ones([len(info,)], dtype=bool)
+    else:
+        idx = (info.phase == phase)
+        
+    info = info.loc[idx]
+    data = data[idx, :]
     
-    flat_gii = nt.make_label_gifti(
-                                    img_flat.astype(int),
-                                    anatomical_struct='Cerebellum',
-                                    label_names= ["none", "load", "recall", "overlap"],
-                                    label_RGBA=[[0, 0, 0, 0], [0, 0, 1, 1], [1, 0, 0, 1], [1, 0, 1, 1]]
-                                    )
-    return nifti_img, flat_gii
+    # get contrasts
+    data_load, data_recall = calc_contrast(data, info)
+    return data_load,data_recall
+
+def plot_overlap_cerebellum(subject = "group", 
+                            phase = 0, 
+                            scale = None, 
+                            threshold = None):
+    """
+    Makes an overlap plot for the cerebellum 
+    """
+    load_eff,dir_eff=load_contrast(ses_id = 'ses-02',subj = subject,atlas_space='SUIT3',phase=phase)
+    data=np.c_[dir_eff,
+               np.zeros(load_eff.shape),
+               load_eff].T # Leave the green gun empty 
+    atlas, a_info = am.get_atlas('SUIT3',gl.atlas_dir)
+    Nii = atlas.data_to_nifti(data)
+    data = suit.vol_to_surf(Nii,space='SUIT')
+    rgb = suit.flatmap.map_to_rgb(data,scale=scale,threshold=threshold)
+    ax = suit.flatmap.plot(rgb,overlay_type='rgb', colorbar = True)
+    return ax
+
+def plot_overlap_cortex(subject = "group", 
+                        phase=0, 
+                        scale = None, 
+                        threshold = None):
+    """
+    Makes an overlap plot for the cerebellum 
+    """
+    load_eff,dir_eff= load_contrast(ses_id = 'ses-02',subj = "group",atlas_space='fs32k',phase=phase)
+    # get the data into surface
+    atlas, a_info = am.get_atlas('fs32k',gl.atlas_dir)
+    load_cifti = atlas.data_to_cifti(load_eff.reshape(-1, 1).T)
+    dir_cifti = atlas.data_to_cifti(dir_eff.reshape(-1, 1).T)
+
+    # get the lists of data for each hemi
+    load_list = nt.surf_from_cifti(load_cifti)
+    dir_list = nt.surf_from_cifti(dir_cifti)
+
+    ax = []
+    for i,hemi in enumerate(['L', 'R']):
+        plt.figure()
+        data=np.c_[dir_list[i].T,
+                np.zeros(load_list[i].T.shape),
+                load_list[i].T] # Leave the green gun empty 
+
+        # plt.subplot(1,2,i+1)
+        rgb = suit.flatmap.map_to_rgb(data,scale,threshold=threshold)
+        ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
+    return ax
 
 def calc_load_recall_effect(type = 'CondAll', 
                             threshold = 0, 
@@ -161,7 +206,7 @@ def calc_load_recall_effect(type = 'CondAll',
                 data_phase = data[idx, :]
                 
                 # get load and recall contrasts for the current subject
-                data_effect = get_contrast(data_phase, info)
+                data_effect = calc_contrast(data_phase, info)
                 data_load = data_effect[0, :]
                 data_recall = data_effect[1, :]
 
@@ -319,9 +364,6 @@ def overlap_corr(type = 'CondAll'):
             
     return pd.concat(D)
 
-# get the contrasts of interest for each subject
-# do group analysis
-
 def conjunction_map_cortex(type = "CondAll", phase = "Enc"):
 
     """
@@ -439,15 +481,104 @@ def conjunction_map_cerebellum(type = "CondAll", phase = "Enc"):
     t_val_recall, p_val_recall = ttest_1samp(data_recall_arr, 0)
     z_val_recall = norm.isf(p_val_recall)
 
+    # convert to nifti
+
     return z_val_load, z_val_recall
 
+def plot_contrast_cerebellum(subject, phase = "Enc", effect = "load", save = False):
+    """
+    """
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+
+    # get the cerebellar atlas object
+    atlas, ainfo = am.get_atlas('SUIT3', Data.atlas_dir)
+    # which contrast?
+    effect_name = f"{phase}_{effect}"
+    # load the cifti
+    cifti = nb.load(f"{wkdir}/data/{subject}/load_recall_space_SUIT3_CondAll_{subject}.dscalar.nii")
+
+    # get the names of the contrasts
+    con_names = list(cifti.header.get_axis(0).name)
+
+    # print(cifti.get_fdata().shape)
+
+    # get the index of the contrast in question
+    idx = con_names.index(effect_name)
+
+    # get the map
+    cerebellar_map = cifti.get_fdata()[idx, :]
+
+    # make a nifti object of the map
+    nifti = atlas.data_to_nifti(cerebellar_map)
+
+    # transfer to flat surface
+    img_flat = suit.flatmap.vol_to_surf([nifti], stats='nanmean', space = 'SUIT')
+
+    # plot
+    ax = suit.flatmap.plot(data=img_flat, 
+                      render="plotly", 
+                      hover='auto', 
+                      cmap = "coolwarm", 
+                      colorbar = True, 
+                      bordersize = 1, 
+                      cscale = (-0.1, 0.1))
+
+    # ax.show()
+    ax.update_layout(title = {'text':f"{phase}_{effect}_{subject}", 
+                              'y':0.95,
+                              'x':0.5,
+                              'xanchor': 'center'})
+    ax.show()
+    if save:
+        ax.write_image(f"{wkdir}/figures/flatmap_{phase}_{effect}_{subject}.svg")
+    return 
+
+def plot_contrast_cortex(subject, phase, effect, save = False):
+    """
+    """    
+
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+    
+    # surfaces for plotting
+    surfs = [Data.atlas_dir + f'/tpl-fs32k/tpl_fs32k_hemi-{h}_inflated.surf.gii' for i, h in enumerate(['L', 'R'])]
+    # get the cerebellar atlas object
+    atlas, ainfo = am.get_atlas('SUIT3', Data.atlas_dir)
+    # which contrast?
+    effect_name = f"{phase}_{effect}"
+    # load the cifti
+    cifti = nb.load(f"{wkdir}/data/{subject}/load_recall_space_fs32k_CondAll_{subject}.dscalar.nii")
+
+    # get the names of the contrasts
+    con_names = list(cifti.header.get_axis(0).name)
+
+    # print(cifti.get_fdata().shape)
+
+    # get the index of the contrast in question
+    idx = con_names.index(effect_name)
+    dat_list = nt.surf_from_cifti(cifti)
+
+    # get the numpy array corresponding to the contrast
+    img_con_list = [dat_list[i][idx, :].reshape(-1, 1) for i, h in enumerate(['L', 'R'])]
+
+    
+
+    fig = plotting.plot_surf_stat_map(
+                                        surfs[0], img_con_list[0], hemi='left',
+                                        # title='Surface left hemisphere',
+                                        colorbar=True, 
+                                        view = 'lateral',
+                                        cmap="coolwarm",
+                                        engine='plotly',
+                                        title = f'{phase}_{effect}_{subject}',
+                                        symmetric_cbar = True,
+                                        vmax = 0.1
+                                    )
+
+    ax = fig.figure
+    if save:
+        ax.write_image(f"{wkdir}/figures/cortex_left_{phase}_{effect}_{subject}.svg")
+    return ax
 
 
 if __name__=="__main__":
-    # D1 = calc_reliability_effect()
-    # D2 = overlap_corr()
-    conjunction_map_cortex(type = "CondAll")
-
-
-    
-    print("hello")
+    plot_overlap_cortex()

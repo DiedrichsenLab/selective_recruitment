@@ -20,7 +20,6 @@ from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 from PIL import Image
 
-#TODO: overlay two maps using suit flatmap
 #TODO: use dash to plot contrast + roi map as overlay (with transparency)
 #TODO: click on a cerebellar voxel/region and get the connectivity map on the cortex
 

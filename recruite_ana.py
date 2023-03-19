@@ -25,6 +25,10 @@ import selective_recruitment.globals as gl
 import nibabel as nb
 import nitools as nt
 
+# https://www.humanconnectome.org/software/workbench-command/-all-commands-help
+# use subprocess to smooth the cifti files
+# -cifti-smoothing
+
 # Get smoothing matrix, can be used to smooth the weights (for connectivity)
 def get_smooth_matrix(atlas, fwhm = 3):
     """
@@ -52,6 +56,25 @@ def get_smooth_matrix(atlas, fwhm = 3):
      
 
     return smooth_mat
+
+def smooth_surface(cifti_file, 
+                   surface_kernel=2.0,
+                   volume_kernel = 1.0,  
+                   smoothing_direction = 'ROW', 
+                   prefix='s'):
+    """_summary_
+
+    Args:
+        cifti_file (_str_): path to cifti file
+        surface_kernel (float, optional): _smoothing kernel for surface_. Defaults to 2.0.
+        volume_kernel (float, optional): _smoothing kernel for volume in cifti_. Defaults to 1.0.
+        smoothing_direction (str, optional): _direction of smoothing_. Defaults to 'ROW'. other option: 'COLUMN'
+        prefix (str, optional): _prefix added to smoothed file_. Defaults to 's'.
+    """
+    
+    if not cifti_file:
+        sys.exit('Error: No fileList of .func.gii files provided.')
+    subprocess.run(["wb_command","-cifti-smoothing", cifti_file, surface_kernel, volume_kernel, smoothing_direction , f"{prefix}{cifti_file}"])
 
 def calc_mean(data,info,
                 partition='run',

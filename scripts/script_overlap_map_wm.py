@@ -12,6 +12,9 @@ from tabnanny import verbose
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import os
+import sys
+import subprocess
 # modules from functional fusion
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
@@ -25,15 +28,12 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm, ttest_1samp
 
 #
-import os
 import nibabel as nb
 from nilearn import plotting
 import nitools as nt
 import SUITPy.flatmap as flatmap
 from nilearn import plotting
 import scipy.stats as ss
-import warnings
-warnings.filterwarnings('ignore')
 
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
@@ -565,10 +565,4 @@ def plot_contrast_cortex(subject, phase, effect, smooth = True, save = False):
 if __name__=="__main__":
     D = get_reliability_summary(smooth_surf = False)
     
-    # calc_load_recall_effect(type = 'CondAll', 
-    #                         threshold = 0, 
-    #                         smooth = False, 
-    #                         binarize = False)
-    # smooth_cortical_data(smooth_sigma = 3, 
-    #                      type = "CondHalf", 
-    #                      ses_id = "ses-02")
+    

@@ -10,6 +10,9 @@ Author: Ladan Shahshahani
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import os
+import sys
+import subprocess
 # modules from functional fusion
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
@@ -22,14 +25,11 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm, ttest_1samp
 
 #
-import os
 import nibabel as nb
 import nitools as nt
 import SUITPy.flatmap as flatmap
 from nilearn import plotting
 import scipy.stats as ss
-
-# TODO: smooth the cortical and cerebellar maps before getting the overlap/effects
 
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 

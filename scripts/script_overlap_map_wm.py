@@ -8,6 +8,7 @@ Author: Ladan Shahshahani
 """
 # import packages
 import enum
+from tabnanny import verbose
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -18,6 +19,7 @@ import selective_recruitment.globals as gl
 import selective_recruitment.recruite_ana as ra
 import cortico_cereb_connectivity.evaluation as ccev
 import SUITPy as suit
+import surfAnalysisPy.stats as sas
 import surfAnalysisPy as sa
 import matplotlib.pyplot as plt 
 from scipy.stats import norm, ttest_1samp
@@ -30,10 +32,52 @@ import nitools as nt
 import SUITPy.flatmap as flatmap
 from nilearn import plotting
 import scipy.stats as ss
-
-# TODO: smooth the cortical and cerebellar maps before getting the overlap/effects
+import warnings
+warnings.filterwarnings('ignore')
 
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
+
+def calculate_R(A, B):
+    SAB = np.nansum(A * B, axis=0)
+    SBB = np.nansum(B * B, axis=0)
+    SAA = np.nansum(A **2, axis=0)  # use np.nanmean(Y) here?
+
+    R = np.nansum(SAB) / np.sqrt(np.nansum(SBB) * np.nansum(SAA))
+    return R
+
+def smooth_cortical_data(smooth_sigma = 3, 
+                         type = "CondAll", 
+                         ses_id = "ses-02"):
+    # preparing the data and atlases for all the structures
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+    # get list of subjects
+    T = Data.get_participants()
+    subject_list = list(T.participant_id.values)
+    subject_list.append("group")
+
+    # get the surfaces for smoothing
+    surfs = [Data.atlas_dir + f'/tpl-fs32k/tpl_fs32k_hemi-{h}_inflated.surf.gii' for i, h in enumerate(['L', 'R'])]
+    # loop over subjects, load data, smooth and save with s prefix
+    for s, subject in enumerate(subject_list):
+        # load the cifti
+        cifti_fpath = Data.data_dir.format(subject)
+        cifti_fname = f"{subject}_space-fs32k_{ses_id}_{type}.dscalar.nii"
+        cifti_input = f"{cifti_fpath}/{cifti_fname}"
+        cifti_output = f"{cifti_fpath}/s{cifti_fname}"
+
+        # smooth the file
+        sas.smooth_cifti(cifti_input, 
+                              cifti_output,
+                              surfs[0], 
+                              surfs[1], 
+                              surface_sigma = smooth_sigma, 
+                              volume_sigma = 0.0, 
+                              direction = "COLUMN", 
+                              )
+    return
+
+def smooth_cerebellar_data():
+    return
 
 def calc_contrast(data, info):
     """calculates the contrasts for load and recall effect
@@ -68,7 +112,9 @@ def calc_contrast(data, info):
 
 def load_contrast(ses_id = 'ses-02',
                 subj = "group",atlas_space='SUIT3',
-                phase=0):
+                phase=0, 
+                type = "CondAll",
+                smooth = True):
     """
     1. Gets group data 
     2. Calculates the desired contrast (uses the info file to get conditions)
@@ -76,14 +122,14 @@ def load_contrast(ses_id = 'ses-02',
     data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
                                     atlas=atlas_space,
                                     sess=ses_id,
-                                    subj=subj)
+                                    subj=subj,
+                                    type = type,  
+                                    smooth = smooth, 
+                                    verbose = True)
     data = data[0]
 
-    # loop over phases
-    if phase == "overall":
-        idx = True*np.ones([len(info,)], dtype=bool)
-    else:
-        idx = (info.phase == phase)
+    
+    idx = (info.phase == phase)
         
     info = info.loc[idx]
     data = data[idx, :]
@@ -92,14 +138,166 @@ def load_contrast(ses_id = 'ses-02',
     data_load, data_recall = calc_contrast(data, info)
     return data_load,data_recall
 
+def calc_overlap_corr(atlas_space = "fs32k", 
+                      type = "CondAll", 
+                      smooth = True, 
+                      save = False):
+    """
+    calculates the correlations between effects
+    """
+    # preparing the data and atlases for all the structures
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+
+    # create an atlas object 
+    atlas, _ = am.get_atlas(atlas_space, Data.atlas_dir)
+    D = []
+    for subject in Data.get_participants().participant_id:
+        effect_list = []
+        col_names = []
+        for p, phase in enumerate(['Enc', 'Ret']):
+            data_load, data_recall = load_contrast(ses_id = 'ses-02',
+                                                    subj = subject, atlas_space=atlas_space,
+                                                    phase = p,
+                                                    type = type,  
+                                                    smooth = smooth)
+
+            # calculate correlation between the two maps
+            R = calculate_R(data_load, data_recall)
+
+            # get info
+            R_dict = {}
+            R_dict["dataset"] = "WMFS"
+            R_dict["ses_id"] ="ses-02"
+            R_dict["phase"] = phase
+            R_dict["atlas"] = atlas_space
+            R_dict["R"] = R
+            R_dict["sn"] = subject
+
+            R_df = pd.DataFrame(R_dict, index = [0])
+            D.append(R_df)
+
+            # prepare data to be saved as cifti
+            effect_list.append(data_load.reshape(-1, 1).T)
+            col_names.append(f"{phase}_load")
+
+            effect_list.append(data_recall.reshape(-1, 1).T)
+            col_names.append(f"{phase}_recall")
+
+        # make ciftis and save
+        data_effect = np.concatenate(effect_list, axis = 0)
+        # save ciftis as dscalar
+        effect_obj = atlas.data_to_cifti(data_effect, row_axis = col_names)
+
+        # save the cifti file
+        if save:
+            save_path = f"{wkdir}/data/{subject}"
+            if not os.path.isdir(save_path):
+                os.makedirs(save_path)
+
+            nb.save(effect_obj, f"{save_path}/load_recall_space_{atlas_space}_{type}_{subject}.dscalar.nii")        
+    return pd.concat(D)
+
+def calc_effect_reliability(atlas_space = "fs32k", 
+                            smooth = True):
+    # preparing the data and atlases for all the structures
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+
+    # create an atlas object 
+    atlas, _ = am.get_atlas(atlas_space, Data.atlas_dir)
+    D = []
+    for subject in Data.get_participants().participant_id:
+        
+        for p, phase in enumerate(['Enc', 'Ret']):
+            data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas=atlas_space,
+                                    sess="ses-02",
+                                    subj=subject,
+                                    type = "CondHalf",  
+                                    smooth = smooth, 
+                                    verbose = True)
+            load_list = []
+            recall_list = []
+            for half in [1, 2]:
+                idx_p = (info.phase == p)
+                idx_h = (info.half == half)
+                idx = idx_p & idx_h
+
+                info_half = info.loc[idx]
+                data_half = data[0, idx, :]
+                # get data for the half
+                load_half, recall_half = calc_contrast(data_half, info_half)
+                load_list.append(load_half)
+                recall_list.append(recall_half)
+
+            effect_list = []
+            effect_list.append(load_list)
+            effect_list.append(recall_list)
+            
+            # get split half reliability
+            for eff, effect in enumerate(['load', 'recall']):
+                R = calculate_R(effect_list[eff][0], effect_list[eff][1])
+                # get info
+                R_dict = {}
+                R_dict["dataset"] = "WMFS"
+                R_dict["ses_id"] ="ses-02"
+                R_dict["phase"] = phase
+                R_dict["effect"] = effect
+                R_dict["atlas"] = atlas_space
+                R_dict["R"] = R
+                R_dict["sn"] = subject
+
+                R_df = pd.DataFrame(R_dict, index = [0])
+                D.append(R_df)
+
+    return pd.concat(D)
+
+def get_overlap_summary(type = "CondAll", smooth_surf = False):
+    """
+    wrapper to get the dataframe for quantifying the overlap between the load and recall effects
+    """
+
+    D_fs = calc_overlap_corr(atlas_space = "fs32k", 
+                            type = type, 
+                            smooth = smooth_surf, 
+                            save = False)
+    D_suit = calc_overlap_corr(atlas_space = "SUIT3", 
+                            type = type, 
+                            smooth = False, 
+                            save = False)
+    
+    # concatenate the two dataframes to return a full
+    D = pd.concat([D_fs, D_suit], axis = 0)
+
+    return D
+
+def get_reliability_summary(smooth_surf = False):
+    """
+    wrapper to get the dataframe for reliability of load and recall effects
+    """
+    D_fs = calc_effect_reliability(atlas_space = "fs32k", 
+                                   smooth = smooth_surf)
+    D_suit = calc_effect_reliability(atlas_space = "SUIT3", 
+                                    smooth = False)
+
+    # concatenate the two dataframes to return a full
+    D = pd.concat([D_fs, D_suit], axis = 0)
+    return D
+
 def plot_overlap_cerebellum(subject = "group", 
-                            phase = 0, 
+                            phase = 0,
+                            smooth = False, 
                             scale = None, 
+                            type = 'CondAll', 
                             threshold = None):
     """
     Makes an overlap plot for the cerebellum 
     """
-    load_eff,dir_eff=load_contrast(ses_id = 'ses-02',subj = subject,atlas_space='SUIT3',phase=phase)
+    load_eff,dir_eff=load_contrast(ses_id = 'ses-02',
+                                   subj = subject,
+                                   atlas_space='SUIT3',
+                                   phase=phase, 
+                                   smooth = False, 
+                                   type = type)
     data=np.c_[dir_eff,
                np.zeros(load_eff.shape),
                load_eff].T # Leave the green gun empty 
@@ -112,12 +310,19 @@ def plot_overlap_cerebellum(subject = "group",
 
 def plot_overlap_cortex(subject = "group", 
                         phase=0, 
-                        scale = None, 
+                        smooth = True, 
+                        scale = None,
+                        type = "CondAll", 
                         threshold = None):
     """
     Makes an overlap plot for the cerebellum 
     """
-    load_eff,dir_eff= load_contrast(ses_id = 'ses-02',subj = "group",atlas_space='fs32k',phase=phase)
+    load_eff,dir_eff= load_contrast(ses_id = 'ses-02',
+                                    subj = subject,
+                                    atlas_space='fs32k',
+                                    phase=phase, 
+                                    type = type, 
+                                    smooth = smooth)
     # get the data into surface
     atlas, a_info = am.get_atlas('fs32k',gl.atlas_dir)
     load_cifti = atlas.data_to_cifti(load_eff.reshape(-1, 1).T)
@@ -139,232 +344,7 @@ def plot_overlap_cortex(subject = "group",
         ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
     return ax
 
-def calc_load_recall_effect(type = 'CondAll', 
-                            threshold = 0, 
-                            binarize = False):
-    """
-    code to create contrasts for load and recall.
-    can be used to evaluate overlap between the contrasts during encoding and retrieval
-
-    Args:
-        type (str) - type of data you want to use. defaults to 'CondAll'
-        threshold (float) - percentile value you want to use for thresholding. 0 means no threshold
-        binarize (bool) - boolean variable used when you want to threshold the data
-    Returns:
-        effect_obj (cift2image) cifti object containing effects of load and recall in encoding and retrieval
-    """
-    # preparing the data and atlases for all the structures
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-    tensor = []
-    tensor_cerebellum, info_tsv, _ = ds.get_dataset(gl.base_dir,"WMFS",atlas="SUIT3",sess="ses-02",type=type, info_only=False)
-    tensor_cortex, info_tsv, _ = ds.get_dataset(gl.base_dir,"WMFS",atlas="fs32k",sess="ses-02",type=type, info_only=False)
-    tensor.append(tensor_cerebellum)
-    tensor.append(tensor_cortex)
-
-    # get cortical and cerebellar atlases into a list
-    atlases = []
-    atlas_cerebellum, a_info = am.get_atlas('SUIT3',gl.atlas_dir)
-    atlas_cortex, a_info = am.get_atlas('fs32k',gl.atlas_dir)
-    atlases.append(atlas_cerebellum)
-    atlases.append(atlas_cortex)
-
-    # get list of subjects
-    T = Data.get_participants()
-    subject_list = list(T.participant_id.values)
-    # NOTE: group is the subject that is created by averaging the data across all subjects 
-    subject_list.append("group")
-
-    # add the group subject
-    # NOTE: group subject is the subject created by averaging over all subjcts data
-    cifti_file = nb.load(Data.data_dir.format("group") + f"/group_space-{structure}_ses-02_{type}.dscalar.nii")
-    cifti_data = cifti_file.get_fdata()
-    # include the subject labeled group as well
-    tensor[ss] = np.append(tensor[ss], cifti_data[np.newaxis, ...], axis = 0)
-
-    for s, subject in enumerate(subject_list):     
-        effect_obj = []     
-        for ss, structure in enumerate(['SUIT3', 'fs32k']):
-            
-
-            effect_list = []
-            col_names = []
-            for p, phase in enumerate(['Enc', 'Ret', 'overall']):
-
-                print(f"- Doing {phase} {structure} {subject}")
-                
-                # get data for current subject
-                data = tensor[ss][s, :, :]
-
-                # get data for the current phase
-                if phase == "overall":
-                    # averaging over encoding and retrieval
-                    idx = True*np.ones([len(info_tsv,)], dtype=bool)
-                else:
-                    idx = info_tsv.phase == p
-                    
-                info = info_tsv.loc[idx]
-                data_phase = data[idx, :]
-                
-                # get load and recall contrasts for the current subject
-                data_effect = calc_contrast(data_phase, info)
-                data_load = data_effect[0, :]
-                data_recall = data_effect[1, :]
-
-                if threshold != 0:
-                    # threshold the data
-                    data_load =ra.threshold_map(data_load, threshold, binarize = binarize)
-                    data_recall =ra.threshold_map(data_recall, threshold, binarize = binarize)
-
-                effect_list.append(data_load.reshape(-1, 1).T)
-                col_names.append(f"{phase}_load")
-
-                effect_list.append(data_recall.reshape(-1, 1).T)
-                col_names.append(f"{phase}_recall")
-
-            data_effect = np.concatenate(effect_list, axis = 0)
-            # save ciftis as dscalar
-            effect_obj.append(atlases[ss].data_to_cifti(data_effect, row_axis = col_names))
-
-            # save the cifti file
-            save_path = f"{wkdir}/data/{subject}"
-            if not os.path.isdir(save_path):
-                os.makedirs(save_path)
-
-            nb.save(effect_obj[ss], f"{save_path}/load_recall_space_{structure}_{type}_{subject}.dscalar.nii")
-    return 
-
-def calc_reliability_effect(threshold = 0, binarize = False):
-    """Calculates reliability of the contrast across halves
-    """
-
-    # preparing the data and atlases for all the structures
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-    tensor = []
-    tensor_cerebellum, info_tsv, _ = ds.get_dataset(gl.base_dir,"WMFS",atlas="SUIT3",sess="ses-02",type="CondHalf", info_only=False)
-    tensor_cortex, info_tsv, _ = ds.get_dataset(gl.base_dir,"WMFS",atlas="fs32k",sess="ses-02",type="CondHalf", info_only=False)
-    tensor.append(tensor_cerebellum)
-    tensor.append(tensor_cortex)
-
-    # get cortical and cerebellar atlases into a list
-    atlases = []
-    atlas_cerebellum, a_info = am.get_atlas('SUIT3',gl.atlas_dir)
-    atlas_cortex, a_info = am.get_atlas('fs32k',gl.atlas_dir)
-    atlases.append(atlas_cerebellum)
-    atlases.append(atlas_cortex)
-
-    # get list of subjects
-    T = Data.get_participants()
-    subject_list = list(T.participant_id.values)
-    # NOTE: group is the subject that is created by averaging the data across all subjects 
-    subject_list.append("group")
-    DD = []
-    for s, subject in enumerate(subject_list):     
-        for ss, structure in enumerate(['SUIT3', 'fs32k']):
-            # add the group subject
-            # NOTE: group subject is the subject created by averaging over all subjcts data
-            cifti_file = nb.load(Data.data_dir.format("group") + f"/group_space-{structure}_ses-02_CondHalf.dscalar.nii")
-            cifti_data = cifti_file.get_fdata()
-            # include the subject labeled group as well
-            tensor[ss] = np.append(tensor[ss], cifti_data[np.newaxis, ...], axis = 0)
-
-            # R_vox_list = []
-            for p, phase in enumerate(['Enc', 'Ret', 'overall']):
-
-                print(f"- Doing {phase} {structure} {subject}")
-                
-                # get data for current subject
-                data = tensor[ss][s, :, :]
-
-                # get data for the current phase
-                if phase == "overall":
-                    # averaging over encoding and retrieval
-                    idx = True*np.ones([len(info_tsv,)], dtype=bool)
-                else:
-                    idx = info_tsv.phase == p
-
-                # get data for each half
-                load_half_list = []
-                recall_half_list = []
-                effect_half_list = []
-                for half in [1, 2]:
-                    idx_half = info_tsv.half == half
-                    info_half = info_tsv.loc[idx_half & idx]
-                    data_half = data[idx_half & idx, :]
-                
-                    # get load and recall contrasts for the current subject
-                    effect_half = get_contrast(data_half, info_half)
-                    load_half = effect_half[0]
-                    recall_half = effect_half[1]
-
-                    load_half_list.append(load_half.reshape(-1, 1))
-                    recall_half_list.append(recall_half.reshape(-1, 1))
-
-                R_load = calculate_R(load_half_list[0].T, load_half_list[1].T)
-                R_recall = calculate_R(recall_half_list[0].T, recall_half_list[1].T)
-
-
-                R_dict = {}
-                R_dict["dataset"] = np.repeat("WMFS", 2, axis=0)
-                R_dict["ses_id"] =np.repeat("ses-02", 2, axis=0)
-                R_dict["phase"] = np.repeat(phase, 2, axis=0)
-                R_dict["structure"] = np.repeat(structure, 2, axis=0)
-                R_dict["R"] = np.array([R_load,R_recall]) 
-                R_dict["effect"] = np.array(["load","recall"])
-                R_dict["sn"] = np.repeat(subject, 2, axis=0)
-
-                R_df = pd.DataFrame(R_dict, index = [0, 1])
-                DD.append(R_df)
-
-    return pd.concat(DD)
-
-def overlap_corr(type = 'CondAll'):
-    """
-    quantifying the overlap between the two contrasts by calculating the overlap between maps
-    """
-
-    # get Dataset class for your dataset
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-
-    # get list of subjects
-    T = Data.get_participants()
-    subject_list = list(T.participant_id.values)
-    subject_list.append("group")
-    D = []
-    for s, subject in enumerate(subject_list):     
-        for ss, structure in enumerate(['SUIT3', 'fs32k']):
-            # load the cifti object for the subject
-            fpath = f"{wkdir}/data/{subject}"
-            cifti_obj = nb.load(f"{fpath}/load_recall_space_{structure}_{type}_{subject}.dscalar.nii")
-            data_cifti = cifti_obj.get_fdata()
-
-            # get the names of the contrasts
-            con_names = list(cifti_obj.header.get_axis(0).name)
-
-            # loop over phases
-            for p, phase in enumerate(['Enc', 'Ret', 'overall']):
-                # get the indices of contrasts in the current phase
-                effect_idx = [con_names.index(con) for con in con_names if phase in con]
-
-                # get the rows corresponding to the two contrasts
-                data_effect = data_cifti[effect_idx, :]
-
-                # calculate correlations
-                corr= calculate_R(data_effect[0, :], data_effect[1, :])
-                R_dict = {}
-                R_dict["dataset"] = "WMFS"
-                R_dict["ses_id"] ="ses-02"
-                R_dict["phase"] = phase
-                R_dict["structure"] = structure
-                R_dict["R"] = corr
-                R_dict["sn"] = subject
-                R_dict["sn_id"] = s
-
-                R_df = pd.DataFrame(R_dict, index = [0])
-                D.append(R_df)
-            
-    return pd.concat(D)
-
-def conjunction_map_cortex(type = "CondAll", phase = "Enc"):
+def conjunction_map_cortex(type = "CondAll", phase = "Enc", smooth = True):
 
     """
     """
@@ -533,7 +513,7 @@ def plot_contrast_cerebellum(subject, phase = "Enc", effect = "load", save = Fal
         ax.write_image(f"{wkdir}/figures/flatmap_{phase}_{effect}_{subject}.svg")
     return 
 
-def plot_contrast_cortex(subject, phase, effect, save = False):
+def plot_contrast_cortex(subject, phase, effect, smooth = True, save = False):
     """
     """    
 
@@ -546,8 +526,10 @@ def plot_contrast_cortex(subject, phase, effect, save = False):
     # which contrast?
     effect_name = f"{phase}_{effect}"
     # load the cifti
-    cifti = nb.load(f"{wkdir}/data/{subject}/load_recall_space_fs32k_CondAll_{subject}.dscalar.nii")
-
+    if smooth:
+        cifti = nb.load(f"{wkdir}/data/{subject}/sload_recall_space_fs32k_CondAll_{subject}.dscalar.nii")
+    else: 
+        cifti = nb.load(f"{wkdir}/data/{subject}/load_recall_space_fs32k_CondAll_{subject}.dscalar.nii")
     # get the names of the contrasts
     con_names = list(cifti.header.get_axis(0).name)
 
@@ -581,4 +563,12 @@ def plot_contrast_cortex(subject, phase, effect, save = False):
 
 
 if __name__=="__main__":
-    plot_overlap_cortex()
+    D = get_reliability_summary(smooth_surf = False)
+    
+    # calc_load_recall_effect(type = 'CondAll', 
+    #                         threshold = 0, 
+    #                         smooth = False, 
+    #                         binarize = False)
+    # smooth_cortical_data(smooth_sigma = 3, 
+    #                      type = "CondHalf", 
+    #                      ses_id = "ses-02")

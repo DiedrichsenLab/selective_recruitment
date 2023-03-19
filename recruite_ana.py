@@ -25,8 +25,10 @@ import selective_recruitment.globals as gl
 import nibabel as nb
 import nitools as nt
 
-# TODO: smoothing on the surface
-
+# TODO: smooth the cortical and cerebellar maps before getting the overlap/effects
+# https://www.humanconnectome.org/software/workbench-command/-all-commands-help
+# use subprocess to smooth the cifti files
+# -cifti-smoothing
 
 # Get smoothing matrix, can be used to smooth the weights (for connectivity)
 def get_smooth_matrix(atlas, fwhm = 3):

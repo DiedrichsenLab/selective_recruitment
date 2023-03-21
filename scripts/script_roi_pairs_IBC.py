@@ -185,7 +185,8 @@ def make_scatterplots_shift(dataframe_1,dataframe_2, type = 'cerebellum', split=
                         elinewidth=2, 
                         fmt='none', # no marker will be used when plotting the error bars
                         color=(0.3,0.3,0.3), 
-                        ecolor=(0.5,0.5,0.5)
+                        ecolor=(0.5,0.5,0.5),
+                        alpha = 0.5
                         )
         
             # Make scatterplot, determining the markers and colors from the dictionary 
@@ -205,7 +206,8 @@ def make_scatterplots_shift(dataframe_1,dataframe_2, type = 'cerebellum', split=
                         elinewidth=2, 
                         fmt='none', # no marker will be used when plotting the error bars
                         color=(0.3,0.3,0.3), 
-                        ecolor=(0.5,0.5,0.5)
+                        ecolor=(0.5,0.5,0.5),
+                        alpha = 0.5
                         )
             # Make scatterplot, determining the markers and colors from the dictionary 
             ax = sns.scatterplot (x=df_1['Y'], y=df_2['Y'], style = df_1[split], hue = df_1[split], s = 100,legend= True,markers=markers,palette=colors, ax=ax)

@@ -23,11 +23,18 @@ import selective_recruitment.globals as gl
 import selective_recruitment.recruite_ana as ra
 import selective_recruitment.rsa as srsa
 import cortico_cereb_connectivity.evaluation as ccev
+import Correlation_estimation.util as corr_util
+import PcmPy as pcm
 import SUITPy as suit
 # import surfAnalysisPy.stats as sas
 import surfAnalysisPy as sa
 import matplotlib.pyplot as plt 
 from scipy.stats import norm, ttest_1samp
+from sklearn.manifold import MDS
+from sklearn.metrics.pairwise import manhattan_distances, euclidean_distances
+from matplotlib import pyplot as plt
+import seaborn as sns
+from adjustText import adjust_text # to adjust the text labels in the plots (pip install adjustText)
 
 #
 import nibabel as nb
@@ -133,6 +140,111 @@ def divide_by_horiz(atlas_space = "SUIT3", label = "NettekovenSym68c32"):
     # save the lookuptable
     nt.save_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}AP.lut", idx_new, np.array(colors_new), label_new)
     return nii
+
+def calc_G_region(center = False, reorder = ['side', 'anterior']):
+    """
+    creating MDS plots with conditions as axes
+    """
+    # preparing the data and atlases for all the structures
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+
+    # get the data tensor
+    tensor, info, _ = ds.get_dataset(gl.base_dir,"WMFS",atlas="SUIT3",sess="ses-02",type='CondAll', info_only=False)
+
+    # create atlas object
+    atlas_suit, _ = am.get_atlas("SUIT3",gl.atlas_dir)
+
+    # make the label name for cerebellar parcellation
+    lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-NettekovenSym68c32AP_space-SUIT_dseg.nii"
+
+    # get the roi numbers of Ds only
+    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-NettekovenSym68c32AP.lut")
+    
+    
+    D_indx = [label_names.index(name) for name in label_names if "D" in name]
+    D_name = [name for name in label_names if "D" in name]
+
+    # get the colors of Ds
+    colors_D = colors[D_indx, :]
+
+    D_list = []
+    for rr, reg in enumerate(D_indx):
+        reg_dict = {}
+        reg_dict['region'] = reg
+        reg_dict['region_name'] = D_name[rr]
+        reg_dict['region_id'] = rr
+        if 'L' in label_names[reg]:
+            reg_dict['side'] = 'L'
+        if 'R' in label_names[reg]:
+            reg_dict['side'] = 'R'
+        if 'A' in label_names[reg]:
+            reg_dict['anterior'] = True
+        if 'P' in label_names[reg]:
+            reg_dict['anterior'] =False
+        D_list.append(pd.DataFrame(reg_dict, index=[rr]))
+    Dinfo = pd.concat(D_list)
+
+    # get parcels in the atlas
+    label_vec, labels = atlas_suit.get_parcel(lable_file)
+    # average data within parcels
+    ## dimensions will be #subjects-by-#numberCondition-by-#region
+    parcel_data, labels = ds.agg_parcels(tensor, label_vec, fcn=np.nanmean) 
+
+    # get the parcel data corresponding to Ds
+    parcel_data = parcel_data[:, :, D_indx]
+
+    # rearrange data and create partition index across subjects
+    n_subj = parcel_data.shape[0]
+    data_sub = []
+    partition_idx = []
+    for i in range(n_subj):
+        # get the data for current subject
+        data_sub.append(parcel_data[i, :, :])
+        partition_idx.append(i* np.ones([parcel_data.shape[1],]))
+    
+    # prep for rsa
+    data_final = np.concatenate(data_sub, axis = 0)
+    partition = np.concatenate(partition_idx, axis = 0)
+
+    if center: 
+        X = pcm.matrix.indicator(partition)
+    else:
+        X = None
+
+    Z = pcm.matrix.indicator(partition)
+
+    G,_=pcm.est_G_crossval(data_final,Z,partition,X)
+
+    if reorder:
+        Ginf = Dinfo.copy()
+        Ginf=Ginf.sort_values(reorder)
+        ind=Ginf.index.to_numpy()
+        G=G[ind, :][:,ind]
+        Ginf=Ginf.reset_index()
+    else:
+        Ginf = Dinfo.copy()
+
+    # do pca?
+    # dist_manhattan = manhattan_distances(np.nanmean(parcel_data, axis = 0).T)
+    # mds = MDS(dissimilarity='precomputed', random_state=0)
+    # Get the embeddings
+    # X_transform = mds.fit_transform(dist_manhattan)
+    # W2 = mds.fit_transform(G)
+    # ax = fig.add_subplot(121, projection='3d')
+    # plt.scatter(X_transform[:,0], X_transform[:,1], s=100, c=colors)
+    # plt.scatter(X_transform[:,0], X_transform[:,1], s=100, c = colors_D)
+    # sns.scatterplot(x = X_transform[:,0], y = X_transform[:,1], hue = Dinfo["side"], style = Dinfo["anterior"], s = 200)
+
+    # fig, ax = plt.subplots()
+    # plt.imshow(G, cmap = 'jet')
+    # plt.colorbar()
+    # ax.set_xticks(Ginf['region_id'].values)
+    # ax.set_yticks(Ginf['region_id'].values)
+    # ax.set_xticklabels(labels = Ginf['region_name'].values, rotation = 45)
+    # ax.set_yticklabels(labels = Ginf['region_name'].values, rotation = 45)
+    W, Glam = pcm.classical_mds(G,contrast=None,align=None,thres=0)
+
+    return G, Ginf, W, Glam, colors_D
 
 def calculate_R(A, B):
     SAB = np.nansum(A * B, axis=0)
@@ -266,7 +378,11 @@ def calc_overlap_corr(atlas_space = "fs32k",
                                                     smooth = smooth)
 
             # calculate correlation between the two maps
-            R = calculate_R(data_load, data_recall)
+            ## nan to zero
+            data_load = np.nan_to_num(data_load)
+            data_recall = np.nan_to_num(data_recall)
+            ## cosine angle between the two maps
+            R = corr_util.cosang(data_load,data_recall)
 
             # get info
             R_dict = {}
@@ -338,8 +454,14 @@ def calc_effect_reliability(atlas_space = "fs32k",
             effect_list.append(recall_list)
             
             # get split half reliability
+            R_list = []
             for eff, effect in enumerate(['load', 'recall']):
-                R = calculate_R(effect_list[eff][0], effect_list[eff][1])
+                # convert nan to 0
+                effect_list[eff][0] = np.nan_to_num(effect_list[eff][0])
+                effect_list[eff][1] = np.nan_to_num(effect_list[eff][1])
+                # calculate alpha cronbach
+                alpha_cron = corr_util.calc_cronbach(np.c_[effect_list[eff][0], effect_list[eff][1]].T)
+                R = corr_util.cosang(effect_list[eff][0], effect_list[eff][1])
                 # get info
                 R_dict = {}
                 R_dict["dataset"] = "WMFS"
@@ -348,6 +470,7 @@ def calc_effect_reliability(atlas_space = "fs32k",
                 R_dict["effect"] = effect
                 R_dict["atlas"] = atlas_space
                 R_dict["R"] = R
+                R_dict["a_cron"] = alpha_cron
                 R_dict["sn"] = subject
 
                 R_df = pd.DataFrame(R_dict, index = [0])
@@ -446,7 +569,7 @@ def plot_overlap_cortex(subject = "group",
 
     ax = []
     for i,hemi in enumerate(['L', 'R']):
-        # plt.figure()
+        plt.figure()
         data=np.c_[dir_list[i].T,
                 np.zeros(load_list[i].T.shape),
                 load_list[i].T] # Leave the green gun empty 
@@ -652,5 +775,6 @@ def plot_contrast_cortex(subject, phase, effect, smooth = True, save_svg = False
     return ax
 
 if __name__=="__main__":
-    divide_by_horiz()
+    # calc_G_region(reorder = ['side', 'anterior'])
+    calc_G_region(center = False, reorder = ['side', 'anterior'])
     

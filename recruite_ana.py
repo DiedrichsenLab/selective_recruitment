@@ -29,7 +29,42 @@ import nitools as nt
 # use subprocess to smooth the cifti files
 # -cifti-smoothing
 
-# Get smoothing matrix, can be used to smooth the weights (for connectivity)
+def make_ant_post_label(atlas_space = "SUIT3"):
+    """
+    Create a mask that divides the cerebellum into anterior and posterior
+    Args:
+        atlas_space (str) - string representing the atlas space
+    Returns:
+        mask_data (np.ndarray)
+        mask_nii (nb.NiftiImage)
+    """
+    # create an instance of atlas object
+    atlas_suit, ainfo = am.get_atlas(atlas_space, gl.atlas_dir)
+
+    # load in the lobules parcellation
+    lobule_file = f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom_space-SUIT_dseg.nii"
+    
+    # get the lobules in the atlas space
+    lobule_data, lobules = atlas_suit.get_parcel(lobule_file)
+
+    # load the lut file for the lobules 
+    idx_lobule, _, lobule_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom.lut")
+
+    # demarcate the horizontal fissure
+    ## horizontal fissure is between crusI and crusII.
+    ## everything above crusII is the anterior part
+    ## find the indices for crusII
+    crusII_idx = [lobule_names.index(name) for name in lobule_names if "CrusII" in name]
+    posterior_idx = idx_lobule[min(crusII_idx):]
+    anterior_idx = idx_lobule[0:min(crusII_idx)]
+
+    # assign value 1 to the anterior part
+    anterior_mask = np.isin(lobule_data, anterior_idx)
+
+    # assign value 2 to the posterior part
+    posterior_mask = np.isin(lobule_data, posterior_idx)
+    return anterior_mask, posterior_mask
+
 def get_smooth_matrix(atlas, fwhm = 3):
     """
     calculates the smoothing matrix to be applied to data
@@ -75,6 +110,60 @@ def smooth_surface(cifti_file,
     if not cifti_file:
         sys.exit('Error: No fileList of .func.gii files provided.')
     subprocess.run(["wb_command","-cifti-smoothing", cifti_file, surface_kernel, volume_kernel, smoothing_direction , f"{prefix}{cifti_file}"])
+
+def get_reliability_summary(dataset = "WMFS", ses_id = "ses-02", subtract_mean = True):
+    """
+    Calculates cross-validated reliability with runs as cross validating folds
+    Args:
+        dataset (str) - name of the dataset
+        ses_id (str) - id assigned to the session
+        subtract_mean(bool) - subtract mean before calculating the reliability?
+    Returns:
+        df (pd.DataFrame) - summary dataframe containing cross validated reliability measure
+    """
+    
+    # get the datasets
+    Data = ds.get_dataset_class(gl.base_dir, dataset=dataset)
+
+    # loop over cortex and cerebellum
+    D = []
+    for atlas in ["SUIT3", "fs32k"]:
+
+        # get the data tensor
+        tensor, info, _ = ds.get_dataset(gl.base_dir,dataset,atlas = atlas, sess=ses_id,type='CondRun', info_only=False)
+
+        # loop over conditions and calculate reliability
+        for c, _ in enumerate(info.cond_name.loc[info.run == 1]):
+            # get condition info data
+            part_vec = info.run
+            cond_vec = (info.cond_num == c+1)*(c+1)
+
+            # get all the info from info to append to the summary dataframe
+            info_cond = info.loc[(info.cond_num == c+1) & (info.run == 1)]
+
+            r = ds.reliability_within_subj(tensor, part_vec, cond_vec,
+                                            voxel_wise=False,
+                                            subtract_mean=subtract_mean)
+
+            # prep the summary dataframe
+            R = pd.DataFrame()
+            R["sn"] = Data.get_participants().participant_id
+            R["R"] = np.mean(r)
+            R["atlas"] = [atlas]*(r.shape[0])
+            R.reset_index(drop = True, inplace=True)
+
+            # get the rest of the info
+            R_info = pd.concat([info_cond]*r.shape[0], axis = 0)
+            # drop sn column from R_info
+            R_info = R_info.drop(labels="sn", axis = 1)
+            R_info.reset_index(drop = True, inplace=True)
+            R = pd.concat([R, R_info], axis = 1, join = 'outer', ignore_index = False)
+
+            D.append(R)
+    
+    df = pd.concat(D, axis = 0)
+    
+    return df
 
 def calc_mean(data,info,
                 partition='run',
@@ -210,7 +299,8 @@ def get_summary(dataset = "WMFS",
                 cortex_space = 'fs32k',
                 cerebellum_roi =None,
                 cortex_roi = None,
-                add_rest = False):
+                add_rest = True, 
+                divide_region = True):
     """
     get summary dataframe for cerebellum vs. cortex
     Args: 
@@ -268,6 +358,9 @@ def get_summary(dataset = "WMFS",
             info_sub["roi"]   = r * vec
             info_sub["X"]     = X_parcel[i,:,r]
             info_sub["Y"]     = Y_parcel[i,:,r]
+
+            # determine if the region is in the anterior cerebellum or posterior
+
 
             summary_list.append(info_sub)
         
@@ -514,14 +607,15 @@ def make_roi_cortex(cifti_img, info, threshold, localizer = "Verbal2Back"):
     return gifti_img
 
 if __name__ == "__main__":
-    D = get_summary(dataset = "WMFS", 
-                ses_id = 'ses-02', 
-                type = "CondAll", 
-                cerebellum_roi =None, 
-                cortex_roi = None,
-                add_rest = True)
+    get_reliability_summary(dataset = "WMFS", ses_id = "ses-02", subtract_mean = True)
+    # D = get_summary(dataset = "WMFS", 
+    #             ses_id = 'ses-02', 
+    #             type = "CondAll", 
+    #             cerebellum_roi =None, 
+    #             cortex_roi = None,
+    #             add_rest = True)
 
-    DD = run_pca(D, zero_mean = True)
+    # DD = run_pca(D, zero_mean = True)
 
 
 

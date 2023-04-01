@@ -19,6 +19,8 @@ import subprocess
 # modules from functional fusion
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
+import Functional_Fusion.util as futil
+import Functional_Fusion.matrix as fmatrix
 import selective_recruitment.globals as gl
 import selective_recruitment.recruite_ana as ra
 import selective_recruitment.rsa as srsa
@@ -45,9 +47,18 @@ import SUITPy.flatmap as flatmap
 from nilearn import plotting
 import scipy.stats as ss
 
+import numpy as np
+from numpy import matrix, sum,mean,trace,sqrt, zeros, ones
+from PcmPy.matrix import indicator
+from scipy.linalg import solve, pinv
+from scipy.spatial import procrustes
+from numpy.linalg import eigh
+
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
 # TODO: MDS plot in the condition space
+# TODO: Do cross validated reliability per effect 
+# TODO: Do cross validated correltion (as overlap measure) between the two effects
 
 def divide_by_horiz(atlas_space = "SUIT3", label = "NettekovenSym68c32"):
     """
@@ -141,24 +152,39 @@ def divide_by_horiz(atlas_space = "SUIT3", label = "NettekovenSym68c32"):
     nt.save_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}AP.lut", idx_new, np.array(colors_new), label_new)
     return nii
 
-def calc_G_region(center = False, reorder = ['side', 'anterior']):
+def est_G(Y, X=None, S=None):
     """
-    creating MDS plots with conditions as axes
+    Obtains a crossvalidated estimate of G
+    Y = Z @ U + X @ B + E, where var(U) = G
+
+    Parameters:
+        Y (numpy.ndarray)
+            Activity data
+        Z (numpy.ndarray)
+            2-d: Design matrix for conditions / features U
+            1-d: condition vector
+        part_vec (numpy.ndarray)
+            Vector indicating the partition number
+        X (numpy.ndarray)
+            Fixed effects to be removed
+        S (numpy.ndarray)
+
+    Returns:
+        G_hat (numpy.ndarray)
+            n_cond x n_cond matrix
+        Sig (numpy.ndarray)
+            n_cond x n_cond noise estimate per block
+
     """
-    # preparing the data and atlases for all the structures
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
 
-    # get the data tensor
-    tensor, info, _ = ds.get_dataset(gl.base_dir,"WMFS",atlas="SUIT3",sess="ses-02",type='CondAll', info_only=False)
+    n_channel , n_cond = Y.shape
+    G = Y @ Y.T 
 
-    # create atlas object
-    atlas_suit, _ = am.get_atlas("SUIT3",gl.atlas_dir)
+    return G
 
-    # make the label name for cerebellar parcellation
-    lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-NettekovenSym68c32AP_space-SUIT_dseg.nii"
-
+def get_region_info(label = 'NettekovenSym68c32AP'):
     # get the roi numbers of Ds only
-    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-NettekovenSym68c32AP.lut")
+    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
     
     
     D_indx = [label_names.index(name) for name in label_names if "D" in name]
@@ -184,7 +210,30 @@ def calc_G_region(center = False, reorder = ['side', 'anterior']):
         D_list.append(pd.DataFrame(reg_dict, index=[rr]))
     Dinfo = pd.concat(D_list)
 
+    return Dinfo, D_indx, colors_D
+
+def calc_G_group(center = False, reorder = ['side', 'anterior']):
+    """
+    creating MDS plots with conditions as axes
+    """
+    # TODO: Goal: To investigate the activity profiles of different regions. In other words, how similar those regions are.
+    # TODO: Get the similarity between regions. Use the variance covariance between activity profiles of regions wthin subjects
+    # preparing the data and atlases for all the structures
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+
+    # get the data tensor
+    tensor, info, _ = ds.get_dataset(gl.base_dir,"WMFS",atlas="SUIT3",sess="ses-02",type='CondAll', info_only=False)
+
+    # create atlas object
+    atlas_suit, _ = am.get_atlas("SUIT3",gl.atlas_dir)
+
+    # make the label name for cerebellar parcellation
+    lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-NettekovenSym68c32AP_space-SUIT_dseg.nii"
+
+    # get info for D regions
+    Dinfo, D_indx, colors_D = get_region_info(label = 'NettekovenSym68c32AP')
     # get parcels in the atlas
+
     label_vec, labels = atlas_suit.get_parcel(lable_file)
     # average data within parcels
     ## dimensions will be #subjects-by-#numberCondition-by-#region
@@ -193,58 +242,26 @@ def calc_G_region(center = False, reorder = ['side', 'anterior']):
     # get the parcel data corresponding to Ds
     parcel_data = parcel_data[:, :, D_indx]
 
-    # rearrange data and create partition index across subjects
+    # get different dimensions of the data
     n_subj = parcel_data.shape[0]
-    data_sub = []
-    partition_idx = []
-    for i in range(n_subj):
-        # get the data for current subject
-        data_sub.append(parcel_data[i, :, :])
-        partition_idx.append(i* np.ones([parcel_data.shape[1],]))
-    
-    # prep for rsa
-    data_final = np.concatenate(data_sub, axis = 0)
-    partition = np.concatenate(partition_idx, axis = 0)
+    n_cond = parcel_data.shape[1]
+    n_region = parcel_data.shape[2]
+    # calculate average across subject
+    data_final = np.nanmean(parcel_data, axis = 0)
+    G = est_G(data_final.T)
+    # pcm.plot_Gs(G[np.newaxis, ...],grid = None, labels=None)
 
-    if center: 
-        X = pcm.matrix.indicator(partition)
-    else:
-        X = None
-
-    Z = pcm.matrix.indicator(partition)
-
-    G,_=pcm.est_G_crossval(data_final,Z,partition,X)
-
-    if reorder:
-        Ginf = Dinfo.copy()
-        Ginf=Ginf.sort_values(reorder)
-        ind=Ginf.index.to_numpy()
-        G=G[ind, :][:,ind]
-        Ginf=Ginf.reset_index()
-    else:
-        Ginf = Dinfo.copy()
-
-    # do pca?
-    # dist_manhattan = manhattan_distances(np.nanmean(parcel_data, axis = 0).T)
-    # mds = MDS(dissimilarity='precomputed', random_state=0)
-    # Get the embeddings
-    # X_transform = mds.fit_transform(dist_manhattan)
-    # W2 = mds.fit_transform(G)
-    # ax = fig.add_subplot(121, projection='3d')
-    # plt.scatter(X_transform[:,0], X_transform[:,1], s=100, c=colors)
-    # plt.scatter(X_transform[:,0], X_transform[:,1], s=100, c = colors_D)
-    # sns.scatterplot(x = X_transform[:,0], y = X_transform[:,1], hue = Dinfo["side"], style = Dinfo["anterior"], s = 200)
-
-    # fig, ax = plt.subplots()
-    # plt.imshow(G, cmap = 'jet')
-    # plt.colorbar()
-    # ax.set_xticks(Ginf['region_id'].values)
-    # ax.set_yticks(Ginf['region_id'].values)
-    # ax.set_xticklabels(labels = Ginf['region_name'].values, rotation = 45)
-    # ax.set_yticklabels(labels = Ginf['region_name'].values, rotation = 45)
     W, Glam = pcm.classical_mds(G,contrast=None,align=None,thres=0)
 
-    return G, Ginf, W, Glam, colors_D
+    Ginf=Dinfo.copy()
+    if reorder:
+        Ginf=Ginf.sort_values(reorder)
+        ind=Ginf.index.to_numpy()
+        G=G[ind,:][:,ind]
+        Ginf=Ginf.reset_index()
+    
+
+    return G, W, Glam, Ginf, colors_D
 
 def calculate_R(A, B):
     SAB = np.nansum(A * B, axis=0)
@@ -349,7 +366,8 @@ def load_contrast(ses_id = 'ses-02',
     return data_load,data_recall
 
 def calc_overlap_corr(atlas_space = "fs32k", 
-                      type = "CondAll", 
+                      type = "CondAll",
+                      subtract_mean = False,  
                       smooth = True,
                       group = False, 
                       verbose = False,
@@ -377,10 +395,16 @@ def calc_overlap_corr(atlas_space = "fs32k",
                                                     verbose = verbose, 
                                                     smooth = smooth)
 
+            # Remove the mean per voxel before correlation calc?
+            if subtract_mean:
+                data_load -= np.nanmean(data_load, axis=0)
+                data_recall -= np.nanmean(data_recall, axis=0)
+
             # calculate correlation between the two maps
             ## nan to zero
             data_load = np.nan_to_num(data_load)
             data_recall = np.nan_to_num(data_recall)
+
             ## cosine angle between the two maps
             R = corr_util.cosang(data_load,data_recall)
 
@@ -401,7 +425,7 @@ def calc_overlap_corr(atlas_space = "fs32k",
             col_names.append(f"{phase}_load")
 
             effect_list.append(data_recall.reshape(-1, 1).T)
-            col_names.append(f"{phase}_recall")
+            col_names.append(f"{phase}_recall_dir")
 
         # make ciftis and save
         data_effect = np.concatenate(effect_list, axis = 0)
@@ -417,7 +441,7 @@ def calc_overlap_corr(atlas_space = "fs32k",
             nb.save(effect_obj, f"{save_path}/load_recall_space_{atlas_space}_{type}_{subject}.dscalar.nii")        
     return pd.concat(D)
 
-def calc_effect_reliability(atlas_space = "fs32k", 
+def calc_effect_reliability(atlas_space = "fs32k", subtract_mean = True, 
                             smooth = True, verbose = False):
     # preparing the data and atlases for all the structures
     Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
@@ -425,44 +449,55 @@ def calc_effect_reliability(atlas_space = "fs32k",
     # create an atlas object 
     atlas, _ = am.get_atlas(atlas_space, Data.atlas_dir)
     D = []
-    for subject in Data.get_participants().participant_id:
-        
-        for p, phase in enumerate(['Enc', 'Ret']):
-            data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+    for ss, subject in enumerate(Data.get_participants().participant_id):
+
+        data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
                                     atlas=atlas_space,
                                     sess="ses-02",
                                     subj=subject,
                                     type = "CondHalf",  
                                     smooth = smooth, 
                                     verbose = verbose)
-            load_list = []
-            recall_list = []
+        for p, phase in enumerate(['Enc', 'Ret']):
+
+            load_half = []
+            recall_dir_half = []
             for half in [1, 2]:
+                # get indices for the current phase
                 idx_p = (info.phase == p)
-                idx_h = (info.half == half)
-                idx = idx_p & idx_h
+                
+                # get info and data for the half
+                idx_h = info.half == half
+                info_half = info.loc[idx_h*idx_p]
+                data_half = data[0, idx_h*idx_p, :]
+                # calculate the contrasts
+                load, recall_dir = calc_contrast(data_half, info_half)
+                # Remove the mean per voxel before correlation calc?
+                if subtract_mean:
+                    load -= np.nanmean(load, axis=0)
+                    recall_dir -= np.nanmean(recall_dir, axis=0)
 
-                info_half = info.loc[idx]
-                data_half = data[0, idx, :]
-                # get data for the half
-                load_half, recall_half = calc_contrast(data_half, info_half)
-                load_list.append(load_half)
-                recall_list.append(recall_half)
+                load = np.nan_to_num(load)
+                recall_dir = np.nan_to_num(recall_dir)
 
-            effect_list = []
-            effect_list.append(load_list)
-            effect_list.append(recall_list)
-            
-            # get split half reliability
-            R_list = []
-            for eff, effect in enumerate(['load', 'recall']):
-                # convert nan to 0
-                effect_list[eff][0] = np.nan_to_num(effect_list[eff][0])
-                effect_list[eff][1] = np.nan_to_num(effect_list[eff][1])
-                # calculate alpha cronbach
-                alpha_cron = corr_util.calc_cronbach(np.c_[effect_list[eff][0], effect_list[eff][1]].T)
-                R = corr_util.cosang(effect_list[eff][0], effect_list[eff][1])
-                # get info
+                load_half.append(load)
+                recall_dir_half.append(recall_dir)
+
+            # calculating reliabilities per effect per phase
+            ## first get the load and recall of halves into a np.ndarray
+            load_arr = np.c_[load_half[0], load_half[1]]
+            recall_dir_arr = np.c_[recall_dir_half[0], recall_dir_half[1]]
+            ## append to a list containing effects
+            effect_list = [] # will contain two halves of data for each effect. load comes first
+            effect_list.append(load_arr)
+            effect_list.append(recall_dir_arr)
+            ## keep in mind that load comes first
+            for e, effect in enumerate(["load", "recall_dir"]):
+                alpha_cron = corr_util.calc_cronbach(effect_list[e].T)
+
+                R = corr_util.cosang(effect_list[e][:, 0], effect_list[e][:, 1])
+
+                # preparing the dataframe
                 R_dict = {}
                 R_dict["dataset"] = "WMFS"
                 R_dict["ses_id"] ="ses-02"
@@ -473,23 +508,26 @@ def calc_effect_reliability(atlas_space = "fs32k",
                 R_dict["a_cron"] = alpha_cron
                 R_dict["sn"] = subject
 
-                R_df = pd.DataFrame(R_dict, index = [0])
+
+                R_df = pd.DataFrame(R_dict, index = [ss])
                 D.append(R_df)
 
     return pd.concat(D)
 
-def get_overlap_summary(type = "CondAll", smooth = True, verbose = False):
+def get_overlap_summary(type = "CondAll", subtract_mean = False, smooth = True, verbose = False):
     """
     wrapper to get the dataframe for quantifying the overlap between the load and recall effects
     """
 
     D_fs = calc_overlap_corr(atlas_space = "fs32k", 
                             type = type, 
+                            subtract_mean=subtract_mean, 
                             smooth = smooth, 
                             verbose=verbose,
                             save = False)
     D_suit = calc_overlap_corr(atlas_space = "SUIT3", 
                             type = type, 
+                            subtract_mean=subtract_mean,
                             smooth = smooth, 
                             verbose=verbose, 
                             save = False)
@@ -499,15 +537,18 @@ def get_overlap_summary(type = "CondAll", smooth = True, verbose = False):
 
     return D
 
-def get_reliability_summary(smooth = True, verbose = False):
+def get_effect_reliability_summary(smooth = True, verbose = False, subtract_mean = True):
     """
     wrapper to get the dataframe for reliability of load and recall effects
     """
     D_fs = calc_effect_reliability(atlas_space = "fs32k", 
+                                   subtract_mean=subtract_mean,
                                    verbose = verbose,
                                    smooth = smooth)
-    D_suit = calc_effect_reliability(atlas_space = "SUIT3", verbose=verbose, 
-                                    smooth = smooth)
+    D_suit = calc_effect_reliability(atlas_space = "SUIT3", 
+                                     subtract_mean=subtract_mean, 
+                                     verbose=verbose, 
+                                     smooth = smooth)
 
     # concatenate the two dataframes to return a full
     D = pd.concat([D_fs, D_suit], axis = 0)
@@ -775,6 +816,6 @@ def plot_contrast_cortex(subject, phase, effect, smooth = True, save_svg = False
     return ax
 
 if __name__=="__main__":
-    # calc_G_region(reorder = ['side', 'anterior'])
-    calc_G_region(center = False, reorder = ['side', 'anterior'])
+    pass
+
     

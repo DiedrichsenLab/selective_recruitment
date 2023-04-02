@@ -54,7 +54,7 @@ from numpy.linalg import eigh
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
 # TODO: MDS plot in the condition space
-
+# TODO: RSA and models for overlap
 
 def calc_contrast(X, info, phase = 0):
     """
@@ -118,7 +118,7 @@ def load_contrast(ses_id = 'ses-02',
     
     # get contrasts
     data_con = calc_contrast(data, info, phase=phase)
-    return data_con, 
+    return data_con 
 
 
 def calc_reliability(data,
@@ -277,213 +277,6 @@ def get_summary_overlap(type = "CondRun",
     return pd.concat(df_list, ignore_index=True)
 
 
-def divide_by_horiz(atlas_space = "SUIT3", label = "NettekovenSym68c32"):
-    """
-    Create a mask that divides the cerebellum into anterior and posterior
-    demarkated by horizontal fissure
-    And then creates a new label file (alongside lookup table) with parcels divided by
-    horizontal fissure
-    Args:
-        atlas_space (str) - string representing the atlas space
-    Returns:
-        mask_data (np.ndarray)
-        mask_nii (nb.NiftiImage)
-    """
-    # create an instance of atlas object
-    atlas_suit, ainfo = am.get_atlas(atlas_space, gl.atlas_dir)
-
-    # load in the lobules parcellation
-    lobule_file = f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom_space-SUIT_dseg.nii"
-    
-    # get the lobules in the atlas space
-    lobule_data, lobules = atlas_suit.get_parcel(lobule_file)
-
-    # load the lut file for the lobules 
-    idx_lobule, _, lobule_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom.lut")
-
-    # demarcate the horizontal fissure
-    ## horizontal fissure is between crusI and crusII.
-    ## everything above crusII is the anterior part
-    ## find the indices for crusII
-    crusII_idx = [lobule_names.index(name) for name in lobule_names if "CrusII" in name]
-    posterior_idx = idx_lobule[min(crusII_idx):]
-    anterior_idx = idx_lobule[0:min(crusII_idx)]
-
-    # assign value 1 to the anterior part
-    anterior_mask = np.isin(lobule_data, anterior_idx)
-
-    # assign value 2 to the posterior part
-    posterior_mask = np.isin(lobule_data, posterior_idx)
-
-    # get the label file
-    lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii"
-    # load the lut file for the label  
-    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
-
-    # get the parcels in the atlas space
-    label_data, labels = atlas_suit.get_parcel(lable_file)
-
-    # loop over regions and divide them into two parts
-    idx_new = [0]
-    colors_new = [[0, 0, 0, 1]]
-    label_new = ["0"] 
-    label_array = np.zeros(label_data.shape)
-    idx_num = 1
-    for i in labels:
-
-        # get a copy of label data
-        label_copy = label_data.copy()
-
-        # convert all the labels other than the current one to NaNs
-        label_copy[label_copy != i] = 0
-
-        # get the anterior and posterior part
-        label_anterior = label_copy * anterior_mask
-        label_posterior = label_copy * posterior_mask
-
-        if any(label_anterior): # some labels only have posterior parts
-            # get the anterior part
-            label_new.append(f"{label_names[i]}_A")
-            idx_new.append(idx_num)
-            colors_new.append(list(np.append(colors[i, :], 1))) 
-            label_array[np.argwhere(label_anterior)] = idx_num
-            idx_num=idx_num+1
-
-        if any(label_posterior):
-            # get the posterior part
-            label_new.append(f"{label_names[i]}_P")
-            idx_new.append(idx_num)
-            colors_new.append(list(np.append(colors[i, :], 1))) 
-            label_array[np.argwhere(label_posterior)] = idx_num
-
-            idx_num=idx_num+1
-
-
-    # create a nifti object
-    nii = atlas_suit.data_to_nifti(label_array)
-
-    # save the nifti
-    nb.save(nii, f"{gl.atlas_dir}/tpl-SUIT/atl-{label}AP_space-SUIT_dseg.nii")
-
-    # save the lookuptable
-    nt.save_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}AP.lut", idx_new, np.array(colors_new), label_new)
-    return nii
-
-
-def est_G(Y, X=None, S=None):
-    """
-    Obtains a crossvalidated estimate of G
-    Y = Z @ U + X @ B + E, where var(U) = G
-
-    Parameters:
-        Y (numpy.ndarray)
-            Activity data
-        Z (numpy.ndarray)
-            2-d: Design matrix for conditions / features U
-            1-d: condition vector
-        part_vec (numpy.ndarray)
-            Vector indicating the partition number
-        X (numpy.ndarray)
-            Fixed effects to be removed
-        S (numpy.ndarray)
-
-    Returns:
-        G_hat (numpy.ndarray)
-            n_cond x n_cond matrix
-        Sig (numpy.ndarray)
-            n_cond x n_cond noise estimate per block
-
-    """
-
-    n_channel , n_cond = Y.shape
-    G = Y @ Y.T 
-
-    return G
-
-
-def get_region_info(label = 'NettekovenSym68c32AP'):
-    # get the roi numbers of Ds only
-    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
-    
-    
-    D_indx = [label_names.index(name) for name in label_names if "D" in name]
-    D_name = [name for name in label_names if "D" in name]
-
-    # get the colors of Ds
-    colors_D = colors[D_indx, :]
-
-    D_list = []
-    for rr, reg in enumerate(D_indx):
-        reg_dict = {}
-        reg_dict['region'] = reg
-        reg_dict['region_name'] = D_name[rr]
-        reg_dict['region_id'] = rr
-        if 'L' in label_names[reg]:
-            reg_dict['side'] = 'L'
-        if 'R' in label_names[reg]:
-            reg_dict['side'] = 'R'
-        if 'A' in label_names[reg]:
-            reg_dict['anterior'] = True
-        if 'P' in label_names[reg]:
-            reg_dict['anterior'] =False
-        D_list.append(pd.DataFrame(reg_dict, index=[rr]))
-    Dinfo = pd.concat(D_list)
-
-    return Dinfo, D_indx, colors_D
-
-
-def calc_G_group(center = False, reorder = ['side', 'anterior']):
-    """
-    creating MDS plots with conditions as axes
-    """
-    # TODO: Goal: To investigate the activity profiles of different regions. In other words, how similar those regions are.
-    # TODO: Get the similarity between regions. Use the variance covariance between activity profiles of regions wthin subjects
-    # preparing the data and atlases for all the structures
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-
-    # get the data tensor
-    tensor, info, _ = ds.get_dataset(gl.base_dir,"WMFS",atlas="SUIT3",sess="ses-02",type='CondAll', info_only=False)
-
-    # create atlas object
-    atlas_suit, _ = am.get_atlas("SUIT3",gl.atlas_dir)
-
-    # make the label name for cerebellar parcellation
-    lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-NettekovenSym68c32AP_space-SUIT_dseg.nii"
-
-    # get info for D regions
-    Dinfo, D_indx, colors_D = get_region_info(label = 'NettekovenSym68c32AP')
-    # get parcels in the atlas
-
-    label_vec, labels = atlas_suit.get_parcel(lable_file)
-    # average data within parcels
-    ## dimensions will be #subjects-by-#numberCondition-by-#region
-    parcel_data, labels = ds.agg_parcels(tensor, label_vec, fcn=np.nanmean) 
-
-    # get the parcel data corresponding to Ds
-    parcel_data = parcel_data[:, :, D_indx]
-
-    # get different dimensions of the data
-    n_subj = parcel_data.shape[0]
-    n_cond = parcel_data.shape[1]
-    n_region = parcel_data.shape[2]
-    # calculate average across subject
-    data_final = np.nanmean(parcel_data, axis = 0)
-    G = est_G(data_final.T)
-    # pcm.plot_Gs(G[np.newaxis, ...],grid = None, labels=None)
-
-    W, Glam = pcm.classical_mds(G,contrast=None,align=None,thres=0)
-
-    Ginf=Dinfo.copy()
-    if reorder:
-        Ginf=Ginf.sort_values(reorder)
-        ind=Ginf.index.to_numpy()
-        G=G[ind,:][:,ind]
-        Ginf=Ginf.reset_index()
-    
-
-    return G, W, Glam, Ginf, colors_D
-
-
 def calculate_R(A, B):
     SAB = np.nansum(A * B, axis=0)
     SBB = np.nansum(B * B, axis=0)
@@ -538,13 +331,16 @@ def plot_overlap_cerebellum(subject = "group",
     """
     Makes an overlap plot for the cerebellum 
     """
-    load_eff,dir_eff=load_contrast(ses_id = 'ses-02',
+    data_con =load_contrast(ses_id = 'ses-02',
                                    subj = subject,
                                    atlas_space='SUIT3',
                                    phase=phase, 
                                    verbose = verbose, 
-                                   smooth = False   , 
+                                   smooth = smooth   , 
                                    type = type)
+
+    load_eff = data_con[:, 0]
+    dir_eff = data_con[:, 1]
     data=np.c_[dir_eff,
                np.zeros(load_eff.shape),
                load_eff].T # Leave the green gun empty 
@@ -566,14 +362,16 @@ def plot_overlap_cortex(subject = "group",
     """
     Makes an overlap plot for the cerebellum 
     """
-    load_eff,dir_eff= load_contrast(ses_id = 'ses-02',
-                                    subj = subject,
-                                    atlas_space='fs32k',
-                                    phase=phase, 
-                                    type = type, 
-                                    verbose = verbose,
-                                    smooth = smooth)
-    # get the data into surface
+    data_con =load_contrast(ses_id = 'ses-02',
+                                   subj = subject,
+                                   atlas_space='fs32k',
+                                   phase=phase, 
+                                   verbose = verbose, 
+                                   smooth = False   , 
+                                   type = type)
+
+    load_eff = data_con[:, 0]
+    dir_eff = data_con[:, 1]
     atlas, a_info = am.get_atlas('fs32k',gl.atlas_dir)
     load_cifti = atlas.data_to_cifti(load_eff.reshape(-1, 1).T)
     dir_cifti = atlas.data_to_cifti(dir_eff.reshape(-1, 1).T)
@@ -616,12 +414,16 @@ def conjunction_ana_cortex(type = "CondAll",
     data_recall_subs = []
     for s, subject in enumerate(subject_list):
 
-        data_load, data_recall = load_contrast(ses_id = 'ses-02',
-                                    subj = subject,atlas_space=atlas_space,
-                                    phase=phase, 
-                                    type = type,
-                                    smooth = smooth, 
-                                    verbose = False)
+        data_con =load_contrast(ses_id = 'ses-02',
+                                   subj = subject,
+                                   atlas_space='fs32k',
+                                   phase=phase, 
+                                   verbose = verbose, 
+                                   smooth = smooth, 
+                                   type = type)
+
+        data_load = data_con[:, 0]
+        data_recall = data_con[:, 1]
 
         # get data for load
         data_load_subs.append(data_load[np.newaxis, ...])
@@ -671,12 +473,16 @@ def conjunction_ana_cerebellum(type = "CondAll",
     data_recall_subs = []
     for s, subject in enumerate(subject_list):
 
-        data_load, data_recall = load_contrast(ses_id = 'ses-02',
-                                    subj = subject,atlas_space=atlas_space,
-                                    phase=phase, 
-                                    type = type,
-                                    smooth = smooth, 
-                                    verbose = False)
+        data_con =load_contrast(ses_id = 'ses-02',
+                                   subj = subject,
+                                   atlas_space='SUIT3',
+                                   phase=phase, 
+                                   verbose = verbose, 
+                                   smooth = smooth, 
+                                   type = type)
+
+        data_load = data_con[:, 0]
+        data_recall = data_con[:, 1]
 
         # get data for load
         data_load_subs.append(data_load[np.newaxis, ...])
@@ -696,31 +502,36 @@ def conjunction_ana_cerebellum(type = "CondAll",
     return t_val_load, t_val_recall
 
 
-def plot_contrast_cerebellum(subject, phase = "Enc", effect = "load", save_svg = False):
+def plot_contrast_cerebellum(phase = "enc", 
+                             effect = "load", 
+                             smooth = True, 
+                             save_svg = False, 
+                             subject = "group"):
     """
     """
     Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
 
+    
     # get the cerebellar atlas object
     atlas, ainfo = am.get_atlas('SUIT3', Data.atlas_dir)
-    # which contrast?
-    effect_name = f"{phase}_{effect}"
-    # load the cifti
-    cifti = nb.load(f"{wkdir}/data/{subject}/load_recall_space_SUIT3_CondAll_{subject}.dscalar.nii")
+    effect_list = ["load", "dir"]
+    phase_list = ["enc", "ret"]
+    
+    effect_idx = effect_list.index(effect)
+    phase_idx = phase_list.index(phase)
 
-    # get the names of the contrasts
-    con_names = list(cifti.header.get_axis(0).name)
+    data_con = load_contrast(ses_id = 'ses-02',
+                            subj = subject,atlas_space='SUIT3',
+                            phase=phase_idx, 
+                            type = "CondAll",
+                            smooth = smooth, 
+                            verbose = False)
 
-    # print(cifti.get_fdata().shape)
 
-    # get the index of the contrast in question
-    idx = con_names.index(effect_name)
-
-    # get the map
-    cerebellar_map = cifti.get_fdata()[idx, :]
+    effect = data_con[:, effect_idx]
 
     # make a nifti object of the map
-    nifti = atlas.data_to_nifti(cerebellar_map)
+    nifti = atlas.data_to_nifti(effect)
 
     # transfer to flat surface
     img_flat = suit.flatmap.vol_to_surf([nifti], stats='nanmean', space = 'SUIT')
@@ -735,7 +546,7 @@ def plot_contrast_cerebellum(subject, phase = "Enc", effect = "load", save_svg =
                       cscale = (-0.1, 0.1))
 
     # ax.show()
-    ax.update_layout(title = {'text':f"{phase}_{effect}_{subject}", 
+    ax.update_layout(title = {'text':f"{phase_list[phase_idx]}_{effect_list[effect_idx]}_{subject}", 
                               'y':0.95,
                               'x':0.5,
                               'xanchor': 'center'})
@@ -745,37 +556,45 @@ def plot_contrast_cerebellum(subject, phase = "Enc", effect = "load", save_svg =
     return 
 
 
-def plot_contrast_cortex(subject, phase, effect, smooth = True, save_svg = False):
+def plot_contrast_cortex(phase = "enc", 
+                         effect = "load", 
+                         smooth = True, 
+                         save_svg = False, 
+                         subject = "group"):
     """
     """    
 
     Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
     
+    # get the cerebellar atlas object
+    atlas, ainfo = am.get_atlas('fs32k', Data.atlas_dir)
+    effect_list = ["load", "dir"]
+    phase_list = ["enc", "ret"]
+    
+    effect_idx = effect_list.index(effect)
+    phase_idx = phase_list.index(phase)
+
+    data_con = load_contrast(ses_id = 'ses-02',
+                            subj = subject,atlas_space='fs32k',
+                            phase=phase_idx, 
+                            type = "CondAll",
+                            smooth = smooth, 
+                            verbose = False)
+
+
+    effect = data_con[:, effect_idx]
+    
     # surfaces for plotting
     surfs = [Data.atlas_dir + f'/tpl-fs32k/tpl_fs32k_hemi-{h}_inflated.surf.gii' for i, h in enumerate(['L', 'R'])]
     # get the cerebellar atlas object
-    atlas, ainfo = am.get_atlas('SUIT3', Data.atlas_dir)
+    atlas, ainfo = am.get_atlas('fs32k', Data.atlas_dir)
     # which contrast?
     effect_name = f"{phase}_{effect}"
-    # load the cifti
-    if smooth:
-        cifti = nb.load(f"{wkdir}/data/{subject}/sload_recall_space_fs32k_CondAll_{subject}.dscalar.nii")
-    else: 
-        cifti = nb.load(f"{wkdir}/data/{subject}/load_recall_space_fs32k_CondAll_{subject}.dscalar.nii")
-    # get the names of the contrasts
-    con_names = list(cifti.header.get_axis(0).name)
 
-    # print(cifti.get_fdata().shape)
+    cifti_img = atlas.data_to_cifti(effect.reshape(-1, 1).T, row_axis=None)
 
-    # get the index of the contrast in question
-    idx = con_names.index(effect_name)
-    dat_list = nt.surf_from_cifti(cifti)
-
-    # get the numpy array corresponding to the contrast
-    img_con_list = [dat_list[i][idx, :].reshape(-1, 1) for i, h in enumerate(['L', 'R'])]
-
+    img_con_list = nt.surf_from_cifti(cifti_img)
     
-
     fig = plotting.plot_surf_stat_map(
                                         surfs[0], img_con_list[0], hemi='left',
                                         # title='Surface left hemisphere',
@@ -783,7 +602,7 @@ def plot_contrast_cortex(subject, phase, effect, smooth = True, save_svg = False
                                         view = 'lateral',
                                         cmap="coolwarm",
                                         engine='plotly',
-                                        title = f'{phase}_{effect}_{subject}',
+                                        title = f'{phase_list[phase_idx]}_{effect_list[effect_idx]}_{subject}',
                                         symmetric_cbar = True,
                                         vmax = 0.1
                                     )
@@ -794,7 +613,11 @@ def plot_contrast_cortex(subject, phase, effect, smooth = True, save_svg = False
     return ax
 
 if __name__=="__main__":
-    pass
+    smooth_cifti_data(surface_sigma = 3, 
+                      volume_sigma = 0,
+                      atlas_space = "fs32k",
+                      type = "CondHalf", 
+                      ses_id = "ses-02")
 
 
     

@@ -21,6 +21,7 @@ import Functional_Fusion.util as futil
 import Functional_Fusion.matrix as fmatrix
 import selective_recruitment.globals as gl
 import selective_recruitment.recruite_ana as ra
+import selective_recruitment.plotting as splotting
 import selective_recruitment.rsa as srsa
 import cortico_cereb_connectivity.evaluation as ccev
 import Correlation_estimation.util as corr_util
@@ -61,6 +62,7 @@ def calc_corr_per_load(atlas_space = "SUIT3",
                         subj = None,
                         ses_id = "ses-02", 
                         smooth = True,  
+                        parcellation = "NettekovenSym68c32", 
                         subtract_mean = False, 
                         type = "CondAll", 
                         verbose = False):
@@ -75,6 +77,8 @@ def calc_corr_per_load(atlas_space = "SUIT3",
                                     smooth = smooth, 
                                     verbose = verbose)
 
+    # load the parcellation in 
+    atlas, ainfo = am.get_atlas(atlas_space, atlas_dir=gl.atlas_dir)
 
     n_subj = data.shape[0]
     D_list = [] # dataframe list for subjects/loads/phases
@@ -96,27 +100,52 @@ def calc_corr_per_load(atlas_space = "SUIT3",
                 # get data for bw
                 d_bw = data_subj[idx_bw, :]
 
-                # subtract the means if chosen
-                if subtract_mean:
-                    d_fw -= np.nanmean(d_fw, axis=1)
-                    d_bw -= np.nanmean(d_bw, axis=1) 
+                # loop over unique regions in the parcellation
+                ## get the parcels
+                if parcellation is not None:
+                    label_img = gl.atlas_dir + '/tpl-SUIT/'+ f'atl-{parcellation}_space-SUIT_dseg.nii'
+                    parcel_vec, parcels = atlas.get_parcel(label_img) 
+                    parcel_vec = parcel_vec.reshape(-1, 1).T   
 
-                # replace nans with 0s
-                d_fw = np.nan_to_num(d_fw)
-                d_bw = np.nan_to_num(d_bw)
+                    # use lookuptable to get region info
+                    parcel_info = splotting.get_label_info(parcellation)               
 
-                # calculate correlation between two maps
-                R = corr_util.cosang(d_fw, d_bw)
+                else: 
+                    parcel_vec = np.ones([1, atlas.P])
+                    parcels = [1]
+                    parcel_info = ['whole']
 
-                # create summary dataframe
-                DD = pd.DataFrame(index = [s])
-                DD["sn"] = f"sub-{s+1:02}"
-                DD["load"] = l
-                DD["phase"] = phase
-                DD["R_fwbw"] = R
-                DD["atlas"] = atlas_space
+                for p, pname in enumerate(parcel_info):
+                    # get the voxels within the current parcel
+                    parcel_mask = parcel_vec == p
 
-                D_list.append(DD)
+                    # get the data within the parcel 
+                    d_fw_parcel = d_fw[parcel_mask]
+                    d_bw_parcel = d_bw[parcel_mask]
+
+                    # subtract the means if chosen
+                    if subtract_mean:
+                        d_fw_parcel -= np.nanmean(d_fw_parcel.reshape(-1, 1), axis=1)
+                        d_bw_parcel -= np.nanmean(d_bw_parcel.reshape(-1, 1), axis=1) 
+
+                    # replace nans with 0s
+                    d_fw_parcel = np.nan_to_num(d_fw_parcel)
+                    d_bw_parcel = np.nan_to_num(d_bw_parcel)
+
+                    # calculate correlation between two maps
+                    R = corr_util.cosang(d_fw_parcel, d_bw_parcel)
+
+                    # create summary dataframe
+                    DD = pd.DataFrame(index = [s])
+                    DD["sn"] = f"sub-{s+1:02}"
+                    DD["load"] = l
+                    DD["phase"] = phase
+                    DD["roi"] = p
+                    DD["roi_name"] = pname
+                    DD["R_fwbw"] = R
+                    DD["atlas"] = atlas_space
+
+                    D_list.append(DD)
     return pd.concat(D_list, ignore_index=True)
 
 
@@ -331,7 +360,8 @@ if __name__ == "__main__":
     D = calc_corr_per_load(atlas_space = "SUIT3", 
                         subj = None,
                         ses_id = "ses-02", 
-                        smooth = False,  
+                        smooth = False, 
+                        # parcellation=None,  
                         subtract_mean = False, 
                         type = "CondAll", 
                         verbose = False)

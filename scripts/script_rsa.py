@@ -17,12 +17,9 @@ import nitools as nt
 import PcmPy as pcm
 import seaborn as sb
 
-# modules from functional fusion
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
 import matplotlib.pyplot as plt
-# modules from connectivity
-import cortico_cereb_connectivity.prepare_data as cprep
 import selective_recruitment.rsa as rsa
 import selective_recruitment.recruite_ana as sr
 

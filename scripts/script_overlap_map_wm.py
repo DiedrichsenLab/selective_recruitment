@@ -53,9 +53,6 @@ from numpy.linalg import eigh
 
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
-# TODO: MDS plot in the condition space
-# TODO: RSA and models for overlap
-
 def calc_contrast(X, info, phase = 0):
     """
     calculates load and recall contrasts of interest in the phase
@@ -275,15 +272,6 @@ def get_summary_overlap(type = "CondRun",
             # append to the list of datafraSmes
             df_list.append(D)
     return pd.concat(df_list, ignore_index=True)
-
-
-def calculate_R(A, B):
-    SAB = np.nansum(A * B, axis=0)
-    SBB = np.nansum(B * B, axis=0)
-    SAA = np.nansum(A **2, axis=0)  # use np.nanmean(Y) here?
-
-    R = np.nansum(SAB) / np.sqrt(np.nansum(SBB) * np.nansum(SAA))
-    return R
 
 
 def smooth_cifti_data(surface_sigma = 3, 
@@ -613,11 +601,8 @@ def plot_contrast_cortex(phase = "enc",
     return ax
 
 if __name__=="__main__":
-    smooth_cifti_data(surface_sigma = 3, 
-                      volume_sigma = 0,
-                      atlas_space = "fs32k",
-                      type = "CondHalf", 
-                      ses_id = "ses-02")
+    pass
+
 
 
     

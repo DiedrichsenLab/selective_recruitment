@@ -41,5 +41,3 @@ def test_cifti_smooth(subject = "group", surf_sigma = 2, vol_sigma = 2, directio
 
 if __name__ == "__main__":
     B = test_cifti_smooth()
-
-    print("hello")

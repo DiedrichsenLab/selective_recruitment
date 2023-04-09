@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 from scipy import stats as sps # to calcualte confidence intervals, etc
 from adjustText import adjust_text # to adjust the text labels in the plots (pip install adjustText)
 
+import cortico_cereb_connectivity.scripts.script_plot_weights as wplot
+
 from statsmodels.stats.anova import AnovaRM # perform F test
 
 def prep_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
@@ -71,6 +73,18 @@ def annotate(dataframe, labels = 'cond_num', text_size = 'small', text_weight = 
         texts.append(text)
 
     adjust_text(texts) # make sure you have installed adjust_text
+
+def get_label_info(parcellation):
+    # get the lookuptable for the parcellation
+    lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}.lut')
+
+    # get the label info
+    label_info = lookuptable[2]
+    if '0' not in label_info:
+        # append a 0 to it
+        label_info.insert(0, '0')
+    cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
+    return label_info
 
 def plot_parcellation(parcellation, roi_name):
     """
@@ -291,83 +305,160 @@ def plot_cortex_activation(dataset, ses_id, subject, contrast_name):
                                         ))
     return fig_hemi
 
+def plot_connectivity_weight(roi_name = "D2R", 
+                             method = "L2Regression", 
+                             cortex_roi = "Icosahedron1002", 
+                             cerebellum_roi = "NettekovenSym68c32",
+                             cerebellum_atlas = "SUIT3", 
+                             log_alpha = 8, 
+                             dataset_name = "MDTB",
+                             cmap = "coolwarm",  
+                             ses_id = "ses-s1"):
+    """
+    """
+    # get connectivity weight maps for the selected region
+    cifti_img = wplot.get_weight_map(method = method, 
+                                    cortex_roi = cortex_roi, 
+                                    cerebellum_roi = cerebellum_roi,
+                                    cerebellum_atlas = cerebellum_atlas, 
+                                    log_alpha = log_alpha, 
+                                    dataset_name = dataset_name, 
+                                    ses_id = ses_id,
+                                    type = "dscalar" 
+                                    )
 
-# def annotate2(dataframe, xlabel, ylabel, labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
-#     """
-#     annotate data points in the scatterplot
-#     Args:
-#     dataframe (pd.DataFrame)
-#     labels (str,series) - column of the dataframe that is to be used as label
-#         or dict that maps the index of the dataframe to a label
-#     text_size (str) 
-#     text_weight (str)
-#     labels (str) 
-#     """
-#     texts = []
-#     if labels is str:
-#         labels = dataframe[labels]
-#     for i,d in dataframe.iterrows():   
-#         text = plt.text(
-#                         d[xlabel]+0.001, 
-#                         d[ylabel], 
-#                         s = labels.loc[i],
-#                         horizontalalignment='left', 
-#                         size=text_size, 
-#                         weight=text_weight
-#                         )
-#         texts.append(text)
+    # get the cortical weight map corresponding to the current 
+    ## get parcel axis from the cifti image
+    parcel_axis = cifti_img.header.get_axis(0)
+    ## get the name of the parcels in the parcel_axis
+    idx = list(parcel_axis.name).index(roi_name)
+    # get the maps for left and right hemi
+    weight_map_list = nt.surf_from_cifti(cifti_img)
+    # get the map for the selected region for left and right hemispheres
+    weight_roi_list = [weight_map_list[h][idx, :] for h in [0, 1]]
 
-#     adjust_text(texts) # make sure you have installed adjust_text
-# def make_scatterplot2(dataframe, xlabel, ylabel, xerr, yerr,  split='cond_num', labels=None,
-#         colors=None,markers=None):
-#     """
-#     make scatterplot
-#     Args: 
-#     dataframe (pd.DataFrame) - 
-#             entire dataframe with individual subject data and fitted slopes and intercepts
-#     split (str) - column name indicating the different conditions to be plotted
-#     labels(dict)    - column name to be used to determine shape of the marker
-#     label (str)    - column name to be used to determine the label of the data points
-#     height (int)   - int to determine the height of the plot
-#     aspect (float) - floating number to determine the aspect ratio of the plot
-#     """
-#     # do the scatter plot
-#     grouped = dataframe.groupby([split])
-#     agg_kw = {split:'first',
-#               xlabel:np.mean,ylabel: np.mean}
-#     df = grouped.agg(agg_kw)
+    surf_hemi = []
+    fig_hemi = []
+    for h, hemi in enumerate(['L', 'R']):
+        img = weight_map_list[h]
+        # get the numpy array corresponding to the contrast
+        img_data = weight_roi_list[h]
+        surf_hemi.append(gl.atlas_dir + f"/tpl-fs32k/tpl_fs32k_hemi-{hemi}_inflated.surf.gii")
+        
+        fig_hemi.append(plotting.view_surf(
+                                        surf_hemi[h], img_data, colorbar=True, 
+                                        cmap=cmap, vmax = np.nanmax(img_data), 
+                                        vmin = np.nanmin(img_data)
+                                        ))
+    return fig_hemi
+
+
+
+# UNDER CONSTRUCTION
+def plot_MDS(x, y, Dinf, colors_D, text_size = 'small', text_weight = 'regular'):
+    """
+    """
+    fig = plt.figure()
     
-#     df[f"{xlabel}_CI"] = grouped[xlabel].apply(sps.sem) * 1.96
-#     df[f"{ylabel}_CI"] = grouped[ylabel].apply(sps.sem)*1.96
-#     df['xerr'] = grouped[xerr].apply(sps.sem)*1.96
-#     df['yerr'] = grouped[yerr].apply(sps.sem)*1.96
+    plt.scatter(x, y, s=100, c = colors_D)
+    texts = []
+    for i,d in Dinf.iterrows():  
+        text = plt.text(
+                        x[i] + 0.001, 
+                        y[i], 
+                        s = Dinf['region_name'].loc[i],
+                        horizontalalignment='left', 
+                        size=text_size, 
+                        weight=text_weight
+                        )
+        texts.append(text)
 
-#     # add  the appropriate errorbars  
-#     plt.errorbar(x = df[xlabel], 
-#                  y = df[ylabel], 
-#                  yerr = df[yerr],
-#                  xerr = df[xerr],
-#                  elinewidth=2, 
-#                  fmt='none', # no marker will be used when plotting the error bars
-#                  color=(0.3,0.3,0.3), 
-#                  ecolor=(0.5,0.5,0.5)
-#                 )
+    adjust_text(texts) # make sure you have installed adjust_text
+    return
 
-#     # # Plot average regression line 
-#     # xrange = np.array([df[xlabel].min(),df['X'].max()])
-#     # ypred = xrange*df.slope.mean()+df.intercept.mean()
-#     # plt.plot(xrange,ypred,'k-')
+def annotate2(dataframe, xlabel, ylabel, labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
+    """
+    annotate data points in the scatterplot
+    Args:
+    dataframe (pd.DataFrame)
+    labels (str,series) - column of the dataframe that is to be used as label
+        or dict that maps the index of the dataframe to a label
+    text_size (str) 
+    text_weight (str)
+    labels (str) 
+    """
+    texts = []
+    if labels is str:
+        labels = dataframe[labels]
+    for i,d in dataframe.iterrows():   
+        text = plt.text(
+                        d[xlabel]+0.001, 
+                        d[ylabel], 
+                        s = labels.loc[i],
+                        horizontalalignment='left', 
+                        size=text_size, 
+                        weight=text_weight
+                        )
+        texts.append(text)
 
-#     # Make scatterplot, determining the markers and colors from the dictionary 
-#     ax = sns.scatterplot(data=df, x=xlabel, y=ylabel, style = split, hue = split, s = 100,legend=None,markers=markers,palette=colors)
+    adjust_text(texts) # make sure you have installed adjust_text
+def make_scatterplot2(dataframe, xlabel, ylabel, xerr, yerr,  split='cond_num', labels=None,
+        colors=None,markers=None):
+    """
+    make scatterplot
+    Args: 
+    dataframe (pd.DataFrame) - 
+            entire dataframe with individual subject data and fitted slopes and intercepts
+    split (str) - column name indicating the different conditions to be plotted
+    labels(dict)    - column name to be used to determine shape of the marker
+    label (str)    - column name to be used to determine the label of the data points
+    height (int)   - int to determine the height of the plot
+    aspect (float) - floating number to determine the aspect ratio of the plot
+    """
+    # do the scatter plot
+    grouped = dataframe.groupby([split])
+    agg_kw = {split:'first',
+              xlabel:np.mean,ylabel: np.mean}
+    df = grouped.agg(agg_kw)
+    
+    df[f"{xlabel}_CI"] = grouped[xlabel].apply(sps.sem) * 1.96
+    df[f"{ylabel}_CI"] = grouped[ylabel].apply(sps.sem)*1.96
 
-#     # set labels
-#     ax.set_xlabel(xlabel)
-#     ax.set_ylabel(ylabel)
+    if xerr is not None:
+        df['xerr'] = grouped[xerr].apply(sps.sem)*1.96
+    else:
+        df['xerr'] = None
+    if yerr is not None:
+        df['yerr'] = grouped[yerr].apply(sps.sem)*1.96
+    else: 
+        df['yerr'] = None
 
-#     # get labels for each data point
-#     annotate2(df, xlabel=xlabel, ylabel=ylabel,
-#             text_size = 'small', 
-#             text_weight = 'regular', 
-#             labels = df[split].map(labels))
-#     return
+    # add  the appropriate errorbars  
+    plt.errorbar(x = df[xlabel], 
+                 y = df[ylabel], 
+                #  yerr = df['xerr'],
+                #  xerr = df['yerr'],
+                 elinewidth=2, 
+                 fmt='none', # no marker will be used when plotting the error bars
+                 color=(0.3,0.3,0.3), 
+                 ecolor=(0.5,0.5,0.5)
+                )
+
+    # # Plot average regression line 
+    # xrange = np.array([df[xlabel].min(),df['X'].max()])
+    # ypred = xrange*df.slope.mean()+df.intercept.mean()
+    # plt.plot(xrange,ypred,'k-')
+
+    # Make scatterplot, determining the markers and colors from the dictionary 
+    ax = sns.scatterplot(data=df, x=xlabel, y=ylabel, style = split, hue = split, s = 100,legend=None,markers=markers,palette=colors)
+
+    # set labels
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    # get labels for each data point
+    annotate2(df, xlabel=xlabel, ylabel=ylabel,
+            text_size = 'small', 
+            text_weight = 'regular', 
+            labels = df[split].map(labels))
+    return

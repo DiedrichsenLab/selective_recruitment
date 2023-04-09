@@ -148,7 +148,7 @@ def get_reliability_summary(dataset = "WMFS", ses_id = "ses-02", subtract_mean =
             # prep the summary dataframe
             R = pd.DataFrame()
             R["sn"] = Data.get_participants().participant_id
-            R["R"] = np.mean(r)
+            R["R"] = np.mean(r, axis = 1)
             R["atlas"] = [atlas]*(r.shape[0])
             R.reset_index(drop = True, inplace=True)
 
@@ -358,9 +358,6 @@ def get_summary(dataset = "WMFS",
             info_sub["roi"]   = r * vec
             info_sub["X"]     = X_parcel[i,:,r]
             info_sub["Y"]     = Y_parcel[i,:,r]
-
-            # determine if the region is in the anterior cerebellum or posterior
-
 
             summary_list.append(info_sub)
         

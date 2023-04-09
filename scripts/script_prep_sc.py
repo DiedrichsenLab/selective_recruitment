@@ -2,17 +2,18 @@
 script to prepare dataframe for scatterplots
 @ Ladan Shahshahani Joern Diedrichsen Feb 19 2023
 """
-import os
-import numpy as np
 from pathlib import Path
 import pandas as pd
 from collections import defaultdict
+import deepdish as dd
+import numpy as np
 
 import nibabel as nb
 import Functional_Fusion.dataset as fdata 
 import Functional_Fusion.atlas_map as am
 import selective_recruitment.recruite_ana as ra
 import selective_recruitment.globals as gl
+import selective_recruitment.plotting as splotting
 
 out_dir = '/Volumes/diedrichsen_data$/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 if not Path(out_dir).exists():
@@ -21,11 +22,12 @@ if not Path(out_dir).exists():
 
 def get_summary_conn(dataset = "WMFS", 
                      ses_id = 'ses-02', 
+                     atlas_space = "SUIT3", 
                      cerebellum_roi = "Verbal2Back", 
-                     cortex_roi = "Icosahedron-1002_Sym.32k",
+                     cortex_roi = "Icosahedron1002",
                      type = "CondHalf", 
                      add_rest = True,
-                     conn_dataset = "MDTB", 
+                     conn_dataset = "MDTB",
                      conn_method = "L2Regression", 
                      log_alpha = 8, 
                      conn_ses_id = "ses-s1"):
@@ -35,13 +37,17 @@ def get_summary_conn(dataset = "WMFS",
     It's written similar to get_symmary from recruite_ana code
     """
     
-    tensor_cerebellum, info, _ = fdata.get_dataset(gl.base_dir,dataset,atlas="SUIT3",sess=ses_id,type=type, info_only=False)
+    tensor_cerebellum, info, _ = fdata.get_dataset(gl.base_dir,dataset,atlas=atlas_space,sess=ses_id,type=type, info_only=False)
     tensor_cortex, info, _ = fdata.get_dataset(gl.base_dir,dataset,atlas="fs32k",sess=ses_id,type=type, info_only=False)
 
     # get connectivity weights and scaling 
-    conn_dir = os.path.join(gl.conn_dir, conn_dataset, "train")
-    weights = np.load(os.path.join(conn_dir, f"{cortex_roi}_{conn_ses_id}_{conn_method}_logalpha_{log_alpha}_best_weights.npy"))
-    scale = np.load(os.path.join(conn_dir, f'{conn_dataset}_scale.npy'))
+    conn_dir = gl.conn_dir + f"/{atlas_space}/train/{conn_dataset}_{conn_ses_id}_{cortex_roi}_{conn_method}"
+
+    # load the model averaged over subjects
+    fname = conn_dir + f"/{conn_dataset}_{conn_ses_id}_{cortex_roi}_{conn_method}_A{log_alpha}_avg.h5"
+    model = dd.io.load(fname) 
+    weights = model.coef_
+    scale = model.scale_ 
 
     # prepare the cortical data 
     # NOTE: to use connectivity weights estimated in MDTB you always need to pass a tesselation
@@ -59,8 +65,8 @@ def get_summary_conn(dataset = "WMFS",
     # NOTE: if None is passed, then it will average over the whole cerebellum
     if cerebellum_roi is not None:
         cerebellum_label = gl.atlas_dir + '/tpl-SUIT' + f'/atl-{cerebellum_roi}_space-SUIT_dseg.nii'
-        
-
+        # use lookuptable to get region info
+        region_info = splotting.get_label_info(cerebellum_roi) 
         # get observed cerebellar data
         Y_parcel, ainfo, Y_parcel_labels = ra.agg_data(tensor_cerebellum, "SUIT3", cerebellum_label, unite_struct = False)
 
@@ -88,6 +94,7 @@ def get_summary_conn(dataset = "WMFS",
             vec = np.ones((len(info_sub),))
             info_sub["sn"]    = i * vec
             info_sub["roi"]   = Yhat_parcel_labels[r] * vec
+            info_sub["roi_name"] = region_info[r+1]
             info_sub["X"]     = Yhat_parcel[i,:,r]
             info_sub["Y"]     = Y_parcel[i,:,r]
 
@@ -99,28 +106,11 @@ def get_summary_conn(dataset = "WMFS",
 
 if __name__ == "__main__":
     #####################################################
-    # print("connectivity for hierarchical parcellation: Regression")
-    # D = get_summary_conn(dataset = "WMFS", 
-    #                     ses_id = 'ses-02', 
-    #                     cerebellum_roi = "NettekovenSym68c32", 
-    #                     cortex_roi = "Icosahedron-1002_Sym.32k",
-    #                     type = "CondHalf",
-    #                     add_rest=True,  
-    #                     conn_dataset = "MDTB", 
-    #                     conn_method = "L2Regression", 
-    #                     log_alpha = 8, 
-    #                     conn_ses_id = "ses-s1")
-
-    # # do regression
-    # D = ra.run_regress(D,fit_intercept=True)
-
-    # D.to_csv(out_dir + '/ROI_NettekovenSym68c32_conn_reg.tsv',sep='\t')
-    #####################################################
-    print("connectivity for hierarchical parcellation: PCA")
+    print("connectivity for hierarchical parcellation: Regression")
     D = get_summary_conn(dataset = "WMFS", 
                         ses_id = 'ses-02', 
                         cerebellum_roi = "NettekovenSym68c32", 
-                        cortex_roi = "Icosahedron-1002_Sym.32k",
+                        cortex_roi = "Icosahedron1002",
                         type = "CondHalf",
                         add_rest=True,  
                         conn_dataset = "MDTB", 
@@ -129,9 +119,10 @@ if __name__ == "__main__":
                         conn_ses_id = "ses-s1")
 
     # do regression
-    D = ra.run_pca(D,zero_mean=True)
+    D = ra.run_regress(D,fit_intercept=True)
 
-    D.to_csv(out_dir + '/ROI_NettekovenSym68c32_conn_pca.tsv',sep='\t')
+    D.to_csv(out_dir + '/ROI_NettekovenSym68c32_conn_reg.tsv',sep='\t')
+    #####################################################
 
 
 

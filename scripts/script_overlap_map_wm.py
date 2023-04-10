@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 The functions used to make label files for the cortical and cerebellar rois
-
 Created on 07/03/2023
 Author: Ladan Shahshahani
 """
@@ -14,6 +13,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import os
+import sys
+import subprocess
 # modules from functional fusion
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
@@ -46,6 +47,7 @@ from nilearn import plotting
 import scipy.stats as ss
 
 import numpy as np
+from numpy import matrix, sum,mean,trace,sqrt, zeros, ones
 from PcmPy.matrix import indicator
 from scipy.linalg import solve, pinv
 from scipy.spatial import procrustes
@@ -53,227 +55,9 @@ from numpy.linalg import eigh
 
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
-def calc_contrast(X, info, phase = 0):
-    """
-    calculates load and recall contrasts of interest in the phase
-    load is defined as the difference between load 6 and load 2 in forward recall
-    recall dir effect is defined as the difference between backwards and forwards
-    Args:
-        X (np.ndarray) - n_subj*n_cond*n_vox
-        info (pd.DataFrame) - pandas dataframe
-        phase (int) - 0 for encoding, 1 for retrieval
-    Returns:
-        X_con (np.ndarray) - n_subj*2*n_vox
-
-    """
-    n_cond = X.shape[0]
-    n_vox = X.shape[1]
-    
-    # get the array for load contrast
-    # NOTE: load contrast is only calculated for forwards conditions
-    load_effect = ((info.phase == phase) & (info.recall == 1) & (info.load == 6))*1
-    load_base = ((info.phase == phase) & (info.recall == 1) &(info.load == 2))*1
-    c_load = load_effect/np.sum(load_effect) - load_base/np.sum(load_base)
-        
-    # get the array for recall direction contrast
-    dir_effect = ((info.phase == phase) & (info.recall == 1))*1 
-    dir_base = ((info.phase == phase) & (info.recall == 0))*1
-    c_dir = dir_effect/np.sum(dir_effect) - dir_base/np.sum(dir_base)
-
-    # initializing the effect array
-    # there are 2 effects of interest:
-    # load: only in forward recall
-    # recall_dir 
-    # the first one is going to be the load (column 0)
-    # the second one is going to be recall direction effect (column 1)
-    X_con = np.zeros([n_vox, 2])
-    # get load effect
-    X_con[:, 0] = (c_load@X)
-    # get recall effect 
-    X_con[:, 1] = c_dir@X
-    return X_con
-
-
-def load_contrast(ses_id = 'ses-02',
-                  subj = "group",atlas_space='SUIT3',
-                  phase=0, 
-                  type = "CondAll",
-                  smooth = True, 
-                  verbose = False):
-    """
-    1. Gets group data 
-    2. Calculates the desired contrast (uses the info file to get conditions)
-    """    
-    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                    atlas=atlas_space,
-                                    sess=ses_id,
-                                    subj=subj,
-                                    type = type,  
-                                    smooth = smooth, 
-                                    verbose = verbose)
-    data = data[0]
-    
-    # get contrasts
-    data_con = calc_contrast(data, info, phase=phase)
-    return data_con 
-
-
-def calc_reliability(data,
-                     info, 
-                     partition = "run", 
-                     phase = 0,  
-                     subtract_mean = True):
-    """
-    calculates reliability
-    """
-    # get numbers 
-    n_subj = data.shape[0]
-    part_vec = info[partition]
-    n_part = len(np.unique(part_vec))
-    parts = np.unique(part_vec)
-
-    r = np.zeros((n_subj, 2, n_part)) # correlation
-    for s in np.arange(n_subj):
-        for pn, part in enumerate(parts):
-            i1 = part_vec == part
-            i2 = part_vec != part
-            # get info and data for the partitions
-            X1 = data[s, i1, :]
-            # get contrast for first partition
-            data1 = calc_contrast(X1, info.loc[i1], phase=phase)
-            X2 = data[s, i2, :]
-            data2 = calc_contrast(X2, info.loc[i2], phase=phase)
-
-            if subtract_mean:
-                data1 -= np.nanmean(data1, axis=0)
-                data2 -= np.nanmean(data2, axis=0)
-
-            r[s, :, pn] = np.nansum(data1 * data2, axis = 0) / \
-                np.sqrt(np.nansum(data1 * data1, axis = 0) * np.nansum(data2 * data2, axis = 0))
-    return r
-
-
-def calc_overlap(data, 
-                 info, 
-                 partition = "run",
-                 phase = 0,  
-                 subtract_mean = True 
-                 ):
-    """
-    calculates reliability
-    """
-    # get numbers 
-    n_subj = data.shape[0]
-    part_vec = info[partition]
-    n_part = len(np.unique(part_vec))
-    parts = np.unique(part_vec)
-
-    r = np.zeros((n_subj, n_part))
-    for s in np.arange(n_subj):
-        for pn, part in enumerate(parts):
-            i1 = part_vec == part
-            i2 = part_vec != part
-            # get info and data for the partitions
-            X1 = data[s, i1, :]
-            # get contrast for first partition
-            data1 = calc_contrast(X1, info.loc[i1], phase=phase)
-            X2 = data[s, i2, :]
-            data2 = calc_contrast(X2, info.loc[i2], phase=phase)
-
-            if subtract_mean:
-                data1 -= np.nanmean(data1, axis=0)
-                data2 -= np.nanmean(data2, axis=0)
-
-            data1 = np.nan_to_num(data1)
-            data2 = np.nan_to_num(data2)
-
-            r[s, pn] = corr_util.cosang(data1,data2)
-    
-    return r
-
-
-def get_summary_reliability(type = "CondRun", 
-                            partition = "run",
-                            subtract_mean = True, 
-                            smooth = False 
-                            ):
-    """
-    """
-    # loop over atlases
-    df_list = []
-    for atlas in ["SUIT3", "fs32k"]:
-        data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                        atlas=atlas,
-                                        sess="ses-02",
-                                        subj=None,
-                                        type = type,  
-                                        smooth = smooth, 
-                                        verbose = False)
-
-        # loop over phases 
-        for p, phase in enumerate(["enc", "ret"]):
-            r = calc_reliability(data,
-                             info,
-                             partition = partition,  
-                             phase = p,  
-                             subtract_mean = subtract_mean)
-
-            # calc mean over partitions
-            r_overal = np.nanmean(r, axis = 2)
-
-            # make the summary df
-            for i, effect in enumerate(["load", "dir"]):
-                D = pd.DataFrame(r_overal[:, i], columns=["R"])
-                D["effect"] = effect
-                D["phase"] = phase
-                D["atlas"] = atlas
-                D["sn"] = dset.get_participants().participant_id
-
-                # append to the list of datafraSmes
-                df_list.append(D)
-    return pd.concat(df_list, ignore_index=True)
-
-
-def get_summary_overlap(type = "CondRun", 
-                        partition = "run",
-                        subtract_mean = True, 
-                        smooth = False 
-                        ):
-    """
-    """
-    # loop over atlases
-    df_list = []
-    for atlas in ["SUIT3", "fs32k"]:
-        data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                        atlas=atlas,
-                                        sess="ses-02",
-                                        subj=None,
-                                        type = type,  
-                                        smooth = smooth, 
-                                        verbose = False)
-
-        # loop over phases 
-        for p, phase in enumerate(["enc", "ret"]):
-            r = calc_overlap(data,
-                                 info,
-                                 partition = partition,  
-                                 phase = p,  
-                                 subtract_mean = subtract_mean)
-
-            # calc mean over partitions
-            r_overal = np.nanmean(r, axis = 1)
-
-            # make the summary df
-            D = pd.DataFrame(r_overal, columns=["R"])
-            D["phase"] = phase
-            D["atlas"] = atlas
-            D["sn"] = dset.get_participants().participant_id
-
-            # append to the list of datafraSmes
-            df_list.append(D)
-    return pd.concat(df_list, ignore_index=True)
-
-
+# TODO: MDS plot in the condition space
+# TODO: Do cross validated reliability per effect 
+# TODO: Do cross validated correltion (as overlap measure) between the two effects
 def smooth_cifti_data(surface_sigma = 3, 
                       volume_sigma = 3,
                       atlas_space = "fs32k",
@@ -307,6 +91,254 @@ def smooth_cifti_data(surface_sigma = 3,
                               )
     return
 
+def calc_contrast(data, info):
+    """calculates the contrasts for load and recall effect
+    Args:
+        data (np.ndarray): 
+        info (pd.DataFrame): _pandas dataframe representing conditions_ 
+        load_effect (int, optional): _value of the load to be used as effect_. Defaults to 6.
+        load_baseline (int, optional): _value of the load to be used as baseline_. Defaults to 2.
+        recall_effect (int, optional): _value of the recall to be used as effect_. Defaults to 0.
+        recall_baseline (int, optional): _value of the recall to be used as baseline_. Defaults to 1.
+        
+    Returns:
+        data_load
+        data_recall
+    """
+    # load effect will be calculated on the forwards conditions only
+    ## get the index for baseline condition
+    idx_base_load = (info.load == 2) & (info.recall == 1)
+    ## get the index for effect condition
+    idx_effect_load = (info.load == 6) & (info.recall == 1)
+    ## load effect
+    data_load = np.nanmean(data[idx_effect_load, :], axis = 0) - np.nanmean(data[idx_base_load, :], axis = 0)
+    
+    # calculate the effect of recall direction
+    ## get the index for baseline condition
+    idx_base_recall = (info.recall == 1) 
+    ## get the index for effect condition
+    idx_effect_recall = (info.recall == 0)
+    ## recall effect
+    data_recall = np.nanmean(data[idx_effect_recall, :], axis = 0) - np.nanmean(data[idx_base_recall, :], axis = 0)
+    return data_load, data_recall
+
+def load_contrast(ses_id = 'ses-02',
+                subj = "group",atlas_space='SUIT3',
+                phase=0, 
+                type = "CondAll",
+                smooth = True, 
+                verbose = False):
+    """
+    1. Gets group data 
+    2. Calculates the desired contrast (uses the info file to get conditions)
+    """    
+    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas=atlas_space,
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type,  
+                                    smooth = smooth, 
+                                    verbose = verbose)
+    data = data[0]
+
+    
+    idx = (info.phase == phase)
+        
+    info = info.loc[idx]
+    data = data[idx, :]
+    
+    # get contrasts
+    data_load, data_recall = calc_contrast(data, info)
+    return data_load,data_recall
+
+def calc_overlap_corr(atlas_space = "fs32k", 
+                      type = "CondAll",
+                      subtract_mean = False,  
+                      smooth = True,
+                      group = False, 
+                      verbose = False,
+                      save = False):
+    """
+    calculates the correlations between effects
+    """
+    # preparing the data and atlases for all the structures
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+    if group:
+        subject_list = ["group"]
+    else: 
+        subject_list = Data.get_participants().participant_id
+    # create an atlas object 
+    atlas, _ = am.get_atlas(atlas_space, Data.atlas_dir)
+    D = []
+    for subject in subject_list:
+        effect_list = []
+        col_names = []
+        for p, phase in enumerate(['Enc', 'Ret']):
+            data_load, data_recall = load_contrast(ses_id = 'ses-02',
+                                                    subj = subject, atlas_space=atlas_space,
+                                                    phase = p,
+                                                    type = type, 
+                                                    verbose = verbose, 
+                                                    smooth = smooth)
+
+            # Remove the mean per voxel before correlation calc?
+            if subtract_mean:
+                data_load -= np.nanmean(data_load, axis=0)
+                data_recall -= np.nanmean(data_recall, axis=0)
+
+            # calculate correlation between the two maps
+            ## nan to zero
+            data_load = np.nan_to_num(data_load)
+            data_recall = np.nan_to_num(data_recall)
+
+            ## cosine angle between the two maps
+            R = corr_util.cosang(data_load,data_recall)
+
+            # get info
+            R_dict = {}
+            R_dict["dataset"] = "WMFS"
+            R_dict["ses_id"] ="ses-02"
+            R_dict["phase"] = phase
+            R_dict["atlas"] = atlas_space
+            R_dict["R"] = R
+            R_dict["sn"] = subject
+
+            R_df = pd.DataFrame(R_dict, index = [0])
+            D.append(R_df)
+
+            # prepare data to be saved as cifti
+            effect_list.append(data_load.reshape(-1, 1).T)
+            col_names.append(f"{phase}_load")
+
+            effect_list.append(data_recall.reshape(-1, 1).T)
+            col_names.append(f"{phase}_recall_dir")
+
+        # make ciftis and save
+        data_effect = np.concatenate(effect_list, axis = 0)
+        # save ciftis as dscalar
+        effect_obj = atlas.data_to_cifti(data_effect, row_axis = col_names)
+
+        # save the cifti file
+        if save:
+            save_path = f"{wkdir}/data/{subject}"
+            if not os.path.isdir(save_path):
+                os.makedirs(save_path)
+
+            nb.save(effect_obj, f"{save_path}/load_recall_space_{atlas_space}_{type}_{subject}.dscalar.nii")        
+    return pd.concat(D)
+
+def calc_effect_reliability(atlas_space = "fs32k", subtract_mean = True, 
+                            smooth = True, verbose = False):
+    # preparing the data and atlases for all the structures
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+
+    # create an atlas object 
+    atlas, _ = am.get_atlas(atlas_space, Data.atlas_dir)
+    D = []
+    for ss, subject in enumerate(Data.get_participants().participant_id):
+
+        data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas=atlas_space,
+                                    sess="ses-02",
+                                    subj=subject,
+                                    type = "CondHalf",  
+                                    smooth = smooth, 
+                                    verbose = verbose)
+        for p, phase in enumerate(['Enc', 'Ret']):
+
+            load_half = []
+            recall_dir_half = []
+            for half in [1, 2]:
+                # get indices for the current phase
+                idx_p = (info.phase == p)
+                
+                # get info and data for the half
+                idx_h = info.half == half
+                info_half = info.loc[idx_h*idx_p]
+                data_half = data[0, idx_h*idx_p, :]
+                # calculate the contrasts
+                load, recall_dir = calc_contrast(data_half, info_half)
+                # Remove the mean per voxel before correlation calc?
+                if subtract_mean:
+                    load -= np.nanmean(load, axis=0)
+                    recall_dir -= np.nanmean(recall_dir, axis=0)
+
+                load = np.nan_to_num(load)
+                recall_dir = np.nan_to_num(recall_dir)
+
+                load_half.append(load)
+                recall_dir_half.append(recall_dir)
+
+            # calculating reliabilities per effect per phase
+            ## first get the load and recall of halves into a np.ndarray
+            load_arr = np.c_[load_half[0], load_half[1]]
+            recall_dir_arr = np.c_[recall_dir_half[0], recall_dir_half[1]]
+            ## append to a list containing effects
+            effect_list = [] # will contain two halves of data for each effect. load comes first
+            effect_list.append(load_arr)
+            effect_list.append(recall_dir_arr)
+            ## keep in mind that load comes first
+            for e, effect in enumerate(["load", "recall_dir"]):
+                alpha_cron = corr_util.calc_cronbach(effect_list[e].T)
+
+                R = corr_util.cosang(effect_list[e][:, 0], effect_list[e][:, 1])
+
+                # preparing the dataframe
+                R_dict = {}
+                R_dict["dataset"] = "WMFS"
+                R_dict["ses_id"] ="ses-02"
+                R_dict["phase"] = phase
+                R_dict["effect"] = effect
+                R_dict["atlas"] = atlas_space
+                R_dict["R"] = R
+                R_dict["a_cron"] = alpha_cron
+                R_dict["sn"] = subject
+
+
+                R_df = pd.DataFrame(R_dict, index = [ss])
+                D.append(R_df)
+
+    return pd.concat(D)
+
+def get_overlap_summary(type = "CondAll", subtract_mean = False, smooth = True, verbose = False):
+    """
+    wrapper to get the dataframe for quantifying the overlap between the load and recall effects
+    """
+
+    D_fs = calc_overlap_corr(atlas_space = "fs32k", 
+                            type = type, 
+                            subtract_mean=subtract_mean, 
+                            smooth = smooth, 
+                            verbose=verbose,
+                            save = False)
+    D_suit = calc_overlap_corr(atlas_space = "SUIT3", 
+                            type = type, 
+                            subtract_mean=subtract_mean,
+                            smooth = smooth, 
+                            verbose=verbose, 
+                            save = False)
+    
+    # concatenate the two dataframes to return a full
+    D = pd.concat([D_fs, D_suit], axis = 0)
+
+    return D
+
+def get_effect_reliability_summary(smooth = True, verbose = False, subtract_mean = True):
+    """
+    wrapper to get the dataframe for reliability of load and recall effects
+    """
+    D_fs = calc_effect_reliability(atlas_space = "fs32k", 
+                                   subtract_mean=subtract_mean,
+                                   verbose = verbose,
+                                   smooth = smooth)
+    D_suit = calc_effect_reliability(atlas_space = "SUIT3", 
+                                     subtract_mean=subtract_mean, 
+                                     verbose=verbose, 
+                                     smooth = smooth)
+
+    # concatenate the two dataframes to return a full
+    D = pd.concat([D_fs, D_suit], axis = 0)
+    return D
 
 def plot_overlap_cerebellum(subject = "group", 
                             phase = 0,
@@ -319,16 +351,13 @@ def plot_overlap_cerebellum(subject = "group",
     """
     Makes an overlap plot for the cerebellum 
     """
-    data_con =load_contrast(ses_id = 'ses-02',
+    load_eff,dir_eff=load_contrast(ses_id = 'ses-02',
                                    subj = subject,
                                    atlas_space='SUIT3',
                                    phase=phase, 
                                    verbose = verbose, 
-                                   smooth = smooth   , 
+                                   smooth = False   , 
                                    type = type)
-
-    load_eff = data_con[:, 0]
-    dir_eff = data_con[:, 1]
     data=np.c_[dir_eff,
                np.zeros(load_eff.shape),
                load_eff].T # Leave the green gun empty 
@@ -338,7 +367,6 @@ def plot_overlap_cerebellum(subject = "group",
     rgb = suit.flatmap.map_to_rgb(data,scale=scale,threshold=threshold)
     ax = suit.flatmap.plot(rgb,overlay_type='rgb', colorbar = True)
     return ax
-
 
 def plot_overlap_cortex(subject = "group", 
                         phase=0, 
@@ -350,16 +378,14 @@ def plot_overlap_cortex(subject = "group",
     """
     Makes an overlap plot for the cerebellum 
     """
-    data_con =load_contrast(ses_id = 'ses-02',
-                                   subj = subject,
-                                   atlas_space='fs32k',
-                                   phase=phase, 
-                                   verbose = verbose, 
-                                   smooth = False   , 
-                                   type = type)
-
-    load_eff = data_con[:, 0]
-    dir_eff = data_con[:, 1]
+    load_eff,dir_eff= load_contrast(ses_id = 'ses-02',
+                                    subj = subject,
+                                    atlas_space='fs32k',
+                                    phase=phase, 
+                                    type = type, 
+                                    verbose = verbose,
+                                    smooth = smooth)
+    # get the data into surface
     atlas, a_info = am.get_atlas('fs32k',gl.atlas_dir)
     load_cifti = atlas.data_to_cifti(load_eff.reshape(-1, 1).T)
     dir_cifti = atlas.data_to_cifti(dir_eff.reshape(-1, 1).T)
@@ -379,7 +405,6 @@ def plot_overlap_cortex(subject = "group",
         rgb = suit.flatmap.map_to_rgb(data,scale,threshold=threshold)
         ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
     return ax
-
 
 def conjunction_ana_cortex(type = "CondAll", 
                            phase = 0,
@@ -402,16 +427,12 @@ def conjunction_ana_cortex(type = "CondAll",
     data_recall_subs = []
     for s, subject in enumerate(subject_list):
 
-        data_con =load_contrast(ses_id = 'ses-02',
-                                   subj = subject,
-                                   atlas_space='fs32k',
-                                   phase=phase, 
-                                   verbose = verbose, 
-                                   smooth = smooth, 
-                                   type = type)
-
-        data_load = data_con[:, 0]
-        data_recall = data_con[:, 1]
+        data_load, data_recall = load_contrast(ses_id = 'ses-02',
+                                    subj = subject,atlas_space=atlas_space,
+                                    phase=phase, 
+                                    type = type,
+                                    smooth = smooth, 
+                                    verbose = False)
 
         # get data for load
         data_load_subs.append(data_load[np.newaxis, ...])
@@ -439,7 +460,6 @@ def conjunction_ana_cortex(type = "CondAll",
 
     return t_val_load_list, t_val_recall_list
 
-
 def conjunction_ana_cerebellum(type = "CondAll", 
                            phase = 0,
                            atlas_space = "SUIT3", 
@@ -461,16 +481,12 @@ def conjunction_ana_cerebellum(type = "CondAll",
     data_recall_subs = []
     for s, subject in enumerate(subject_list):
 
-        data_con =load_contrast(ses_id = 'ses-02',
-                                   subj = subject,
-                                   atlas_space='SUIT3',
-                                   phase=phase, 
-                                   verbose = verbose, 
-                                   smooth = smooth, 
-                                   type = type)
-
-        data_load = data_con[:, 0]
-        data_recall = data_con[:, 1]
+        data_load, data_recall = load_contrast(ses_id = 'ses-02',
+                                    subj = subject,atlas_space=atlas_space,
+                                    phase=phase, 
+                                    type = type,
+                                    smooth = smooth, 
+                                    verbose = False)
 
         # get data for load
         data_load_subs.append(data_load[np.newaxis, ...])
@@ -489,37 +505,31 @@ def conjunction_ana_cerebellum(type = "CondAll",
 
     return t_val_load, t_val_recall
 
-
-def plot_contrast_cerebellum(phase = "enc", 
-                             effect = "load", 
-                             smooth = True, 
-                             save_svg = False, 
-                             subject = "group"):
+def plot_contrast_cerebellum(subject, phase = "Enc", effect = "load", save_svg = False):
     """
     """
     Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
 
-    
     # get the cerebellar atlas object
     atlas, ainfo = am.get_atlas('SUIT3', Data.atlas_dir)
-    effect_list = ["load", "dir"]
-    phase_list = ["enc", "ret"]
-    
-    effect_idx = effect_list.index(effect)
-    phase_idx = phase_list.index(phase)
+    # which contrast?
+    effect_name = f"{phase}_{effect}"
+    # load the cifti
+    cifti = nb.load(f"{wkdir}/data/{subject}/load_recall_space_SUIT3_CondAll_{subject}.dscalar.nii")
 
-    data_con = load_contrast(ses_id = 'ses-02',
-                            subj = subject,atlas_space='SUIT3',
-                            phase=phase_idx, 
-                            type = "CondAll",
-                            smooth = smooth, 
-                            verbose = False)
+    # get the names of the contrasts
+    con_names = list(cifti.header.get_axis(0).name)
 
+    # print(cifti.get_fdata().shape)
 
-    effect = data_con[:, effect_idx]
+    # get the index of the contrast in question
+    idx = con_names.index(effect_name)
+
+    # get the map
+    cerebellar_map = cifti.get_fdata()[idx, :]
 
     # make a nifti object of the map
-    nifti = atlas.data_to_nifti(effect)
+    nifti = atlas.data_to_nifti(cerebellar_map)
 
     # transfer to flat surface
     img_flat = suit.flatmap.vol_to_surf([nifti], stats='nanmean', space = 'SUIT')
@@ -534,7 +544,7 @@ def plot_contrast_cerebellum(phase = "enc",
                       cscale = (-0.1, 0.1))
 
     # ax.show()
-    ax.update_layout(title = {'text':f"{phase_list[phase_idx]}_{effect_list[effect_idx]}_{subject}", 
+    ax.update_layout(title = {'text':f"{phase}_{effect}_{subject}", 
                               'y':0.95,
                               'x':0.5,
                               'xanchor': 'center'})
@@ -543,46 +553,37 @@ def plot_contrast_cerebellum(phase = "enc",
         ax.write_image(f"{wkdir}/figures/flatmap_{phase}_{effect}_{subject}.svg")
     return 
 
-
-def plot_contrast_cortex(phase = "enc", 
-                         effect = "load", 
-                         smooth = True, 
-                         save_svg = False, 
-                         subject = "group"):
+def plot_contrast_cortex(subject, phase, effect, smooth = True, save_svg = False):
     """
     """    
 
     Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
     
-    # get the cerebellar atlas object
-    atlas, ainfo = am.get_atlas('fs32k', Data.atlas_dir)
-    effect_list = ["load", "dir"]
-    phase_list = ["enc", "ret"]
-    
-    effect_idx = effect_list.index(effect)
-    phase_idx = phase_list.index(phase)
-
-    data_con = load_contrast(ses_id = 'ses-02',
-                            subj = subject,atlas_space='fs32k',
-                            phase=phase_idx, 
-                            type = "CondAll",
-                            smooth = smooth, 
-                            verbose = False)
-
-
-    effect = data_con[:, effect_idx]
-    
     # surfaces for plotting
     surfs = [Data.atlas_dir + f'/tpl-fs32k/tpl_fs32k_hemi-{h}_inflated.surf.gii' for i, h in enumerate(['L', 'R'])]
     # get the cerebellar atlas object
-    atlas, ainfo = am.get_atlas('fs32k', Data.atlas_dir)
+    atlas, ainfo = am.get_atlas('SUIT3', Data.atlas_dir)
     # which contrast?
     effect_name = f"{phase}_{effect}"
+    # load the cifti
+    if smooth:
+        cifti = nb.load(f"{wkdir}/data/{subject}/sload_recall_space_fs32k_CondAll_{subject}.dscalar.nii")
+    else: 
+        cifti = nb.load(f"{wkdir}/data/{subject}/load_recall_space_fs32k_CondAll_{subject}.dscalar.nii")
+    # get the names of the contrasts
+    con_names = list(cifti.header.get_axis(0).name)
 
-    cifti_img = atlas.data_to_cifti(effect.reshape(-1, 1).T, row_axis=None)
+    # print(cifti.get_fdata().shape)
 
-    img_con_list = nt.surf_from_cifti(cifti_img)
+    # get the index of the contrast in question
+    idx = con_names.index(effect_name)
+    dat_list = nt.surf_from_cifti(cifti)
+
+    # get the numpy array corresponding to the contrast
+    img_con_list = [dat_list[i][idx, :].reshape(-1, 1) for i, h in enumerate(['L', 'R'])]
+
     
+
     fig = plotting.plot_surf_stat_map(
                                         surfs[0], img_con_list[0], hemi='left',
                                         # title='Surface left hemisphere',
@@ -590,7 +591,7 @@ def plot_contrast_cortex(phase = "enc",
                                         view = 'lateral',
                                         cmap="coolwarm",
                                         engine='plotly',
-                                        title = f'{phase_list[phase_idx]}_{effect_list[effect_idx]}_{subject}',
+                                        title = f'{phase}_{effect}_{subject}',
                                         symmetric_cbar = True,
                                         vmax = 0.1
                                     )
@@ -602,7 +603,3 @@ def plot_contrast_cortex(phase = "enc",
 
 if __name__=="__main__":
     pass
-
-
-
-    

@@ -13,6 +13,7 @@ from tokenize import group
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from collections import OrderedDict
 import os
 # modules from functional fusion
 import Functional_Fusion.atlas_map as am
@@ -30,6 +31,7 @@ import SUITPy as suit
 # import surfAnalysisPy.stats as sas
 import surfAnalysisPy as sa
 import matplotlib.pyplot as plt 
+from matplotlib.colors import LinearSegmentedColormap
 from scipy.stats import norm, ttest_1samp
 from sklearn.manifold import MDS
 from sklearn.metrics.pairwise import manhattan_distances, euclidean_distances
@@ -56,7 +58,6 @@ wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recr
 
 # TODO: calc corr between maps of FW and BW recall per load, per phase 
 # TODO: calc reliability of fw and bw conditions per load per phase
-# TODO: get summary for the corr to do tests and plots
 
 def calc_corr_per_load(atlas_space = "SUIT3", 
                         subj = None,
@@ -125,8 +126,8 @@ def calc_corr_per_load(atlas_space = "SUIT3",
 
                     # subtract the means if chosen
                     if subtract_mean:
-                        d_fw_parcel -= np.nanmean(d_fw_parcel.reshape(-1, 1), axis=1)
-                        d_bw_parcel -= np.nanmean(d_bw_parcel.reshape(-1, 1), axis=1) 
+                        d_fw_parcel -= np.nanmean(d_fw_parcel.reshape(-1, 1), axis=0)
+                        d_bw_parcel -= np.nanmean(d_bw_parcel.reshape(-1, 1), axis=0) 
 
                     # replace nans with 0s
                     d_fw_parcel = np.nan_to_num(d_fw_parcel)
@@ -240,6 +241,103 @@ def divide_by_horiz(atlas_space = "SUIT3", label = "NettekovenSym68c32"):
     # save the lookuptable
     nt.save_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}AP.lut", idx_new, np.array(colors_new), label_new)
     return nii
+
+
+def integrate_subparcels(atlas_space = "SUIT3", label = "NettekovenSym68c32", LR = False):
+    """ Integrates subparcels together and create a new one
+        For example, it puts together all the Ds and create one single D parcel
+
+    """
+    # create an instance of atlas object
+    atlas_suit, ainfo = am.get_atlas(atlas_space, gl.atlas_dir)
+    # get the label file
+    lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii"
+    # load the lut file for the label  
+    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
+
+    # get the parcels in the atlas space
+    label_data, labels = atlas_suit.get_parcel(lable_file)
+
+    # integrating over labels with same names
+    # get unique starting letters
+    # these will be the new set of roi names for the integrated parcellation
+    if LR: # if you want left and right separated
+        l0_all = [f"{name[0]}{hemi}" for name in label_names[1:] for hemi in ['L', 'R']] # ignoring the first one which is 0
+        label_names_new = list(OrderedDict.fromkeys(l0_all))
+        ## get indices of old labels starting with new labels
+        labels_idx = []
+        for letter in label_names_new:
+            labels_idx.append([idx_label[i] for i, ltr in enumerate(label_names) if (ltr.startswith(letter[0])) & (ltr.endswith(letter[-1]))])
+        fname = f"{label}integLR"
+    else:
+        l0_all = [name[0] for name in label_names[1:]] # ignoring the first one which is 0
+        label_names_new = list(OrderedDict.fromkeys(l0_all))
+        labels_idx = []
+        for letter in label_names_new:
+            labels_idx.append([idx_label[i] for i, ltr in enumerate(label_names) if ltr.startswith(letter)])
+        fname = f"{label}integ"
+
+    # label_names_new.insert(0, '0')
+    # loop over these new labels and get the indices
+    # re-number the parcels in label_data
+    label_data_new = np.zeros(label_data.shape)
+    ## get indices of old labels starting with new labels
+
+    idx_new = []
+    for lid, lname in enumerate(label_names_new):
+        print(f"{lid} {lname}")
+        # get a mask for the current label
+        label_mask = np.isin(label_data, labels_idx[lid])
+
+        # use the mask to set new labels
+        label_data_new[label_mask] = lid+1
+        idx_new.append(lid+1)
+
+    # create a nifti object
+    nii = atlas_suit.data_to_nifti(label_data_new)
+
+    # save the nifti
+    nb.save(nii, f"{gl.atlas_dir}/tpl-SUIT/atl-{fname}_space-SUIT_dseg.nii")
+
+    # create colors:
+    cmap = plt.cm.get_cmap("hsv", len(np.unique(label_data_new)[1:]))
+    colors_new = cmap(range(len(np.unique(label_data_new)[1:])))
+
+    # save the lookuptable
+    nt.save_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{fname}.lut", idx_new, np.array(colors_new), label_names_new)
+    return
+
+
+def test_parcellation(atlas_space = "SUIT3", label = "NettekovenSym68c32integLR"): 
+    """
+    Testing parcellations created with integrate_subparcels
+    """
+    Nii = nb.load(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii")
+    data = suit.vol_to_surf(Nii,space='SUIT', stats="mode")
+    
+
+    # get the lookuptable
+    idx_lable, colors, lablenames = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
+    # adding 0
+    lablenames.insert(0, '0')
+    # adding color for 0
+    color0 = np.array([0, 0, 0])
+    colors = np.vstack([color0, colors])
+    colors = np.hstack([colors, np.ones([colors.shape[0], 1])])
+
+    cmap = LinearSegmentedColormap.from_list("my_colors", colors)
+
+    gii = suit.flatmap.make_label_gifti(
+                    data,
+                    anatomical_struct='Cerebellum',
+                    label_names=lablenames,
+                    # column_names=[],
+                    label_RGBA=colors
+                    )
+
+    nb.save(gii, "test.label.gii")
+
+    return
 
 
 def est_G(Y, X=None, S=None):
@@ -357,14 +455,6 @@ def calc_G_group(center = False, reorder = ['side', 'anterior']):
 
 
 if __name__ == "__main__":
-    D = calc_corr_per_load(atlas_space = "SUIT3", 
-                        subj = None,
-                        ses_id = "ses-02", 
-                        smooth = False, 
-                        # parcellation=None,  
-                        subtract_mean = False, 
-                        type = "CondAll", 
-                        verbose = False)
+    pass
 
 
-    print("hello")

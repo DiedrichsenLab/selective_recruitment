@@ -20,8 +20,10 @@ import seaborn as sb
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
 import matplotlib.pyplot as plt
+
 import selective_recruitment.rsa as rsa
 import selective_recruitment.recruite_ana as sr
+import selective_recruitment.globals as gl
 
 
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
@@ -84,7 +86,51 @@ def individual_analysis():
     pass 
 
 
+def cereb_parcel_rsa(label = "NettekovenSym68c32", 
+                     atlas_space = "SUIT3", 
+                     subj = None,
+                     type = "CondRun", 
+                     label_name = "D3R", 
+                     reorder = ["phase", "recall"]
+                     ):
+
+    tensor, info, dataset = ds.get_dataset(gl.base_dir,
+                                           subj = subj,
+                                           dataset = 'WMFS',
+                                           atlas=atlas_space,
+                                           sess='ses-02',
+                                           type=type)
+
+    # create atlas object to use when getting labels
+    atlas, ainfo = am.get_atlas(atlas_dir=gl.atlas_dir, atlas_str=atlas_space)
+
+    # get the label file
+    label_file = f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii"
+
+    # read label lookup table
+    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
+
+    # get the index for the selected label
+    ## the first label is 0, discarding it ...
+    i = label_names[1:].index(label_name)
+    # get parcels 
+    label_vector, labels = atlas.get_parcel(label_file)
+
+    # create a mask for the voxels within the selected label
+    label_mask = label_vector == i
+
+    # loop over subject and do rsa within the selected region
+    n_subj = tensor.shape[0]
+
+    data_region = tensor[:, :, label_mask]
+
+    G1,Ginf = rsa.calc_rsa(data_region,info,center=False,reorder=reorder)
+    return G1, Ginf
 
 if __name__=='__main__':
-    individual_analysis()
-    # cereb_cortical_rsa()
+    cereb_parcel_rsa(label = "NettekovenSym68c32", 
+                     atlas_space = "SUIT3", 
+                     subj = None,
+                     type = "CondRun", 
+                     label_name = "D3R"
+                     )

@@ -56,8 +56,6 @@ from numpy.linalg import eigh
 
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
-# TODO: calc corr between maps of FW and BW recall per load, per phase 
-# TODO: calc reliability of fw and bw conditions per load per phase
 
 def calc_corr_per_load(atlas_space = "SUIT3", 
                         subj = None,
@@ -453,8 +451,54 @@ def calc_G_group(center = False, reorder = ['side', 'anterior']):
 
     return G, W, Glam, Ginf, colors_D
 
+def calc_G(center = False, 
+           subj = None, 
+           label = 'NettekovenSym68c32AP', 
+           reorder = ['side', 'anterior']):
+    """
+    """
+    # preparing the data and atlases for all the structures
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+
+    # get the data tensor
+    tensor, info, _ = ds.get_dataset(gl.base_dir, subj = subj,
+                                     dataset="WMFS",atlas="SUIT3",
+                                     sess="ses-02",type='CondAll', info_only=False)
+
+    # create atlas object
+    atlas_suit, _ = am.get_atlas("SUIT3",gl.atlas_dir)
+
+    # make the label name for cerebellar parcellation
+    lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii"
+
+    # get info for D regions
+    Dinfo, D_indx, colors_D = get_region_info(label = label)
+    # get parcels in the atlas
+
+    label_vec, labels = atlas_suit.get_parcel(lable_file)
+    # average data within parcels
+    ## dimensions will be #subjects-by-#numberCondition-by-#region
+    parcel_data, labels = ds.agg_parcels(tensor, label_vec, fcn=np.nanmean) 
+
+    # get the parcel data corresponding to Ds
+    parcel_data = parcel_data[:, :, D_indx]
+
+    # get different dimensions of the data
+    n_subj = parcel_data.shape[0]
+    n_cond = parcel_data.shape[1]
+    n_region = parcel_data.shape[2]
+
+    # loop over subjects and estimate non-cross-validated G
+    G = np.zeros([n_subj, parcel_data.shape[2], parcel_data.shape[2]])
+    for s in range(n_subj):
+        # estimate non-cross validated G and put it inside the array
+        data_subj = parcel_data[s, :, :]
+        G[s, :, :] = est_G(data_subj.T)
+    return G, Dinfo
+
 
 if __name__ == "__main__":
+    calc_G_group(center = False, reorder = ['side', 'anterior'])
     pass
 
 

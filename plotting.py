@@ -352,6 +352,49 @@ def plot_connectivity_weight(roi_name = "D2R",
                                         ))
     return fig_hemi
 
+def roi_difference(df, 
+             xvar = "cond_name", 
+             hue = "roi_name", 
+             depvar = "Y", 
+             sub_roi = None,
+             roi = "D",
+             var = ["cond_name", "roi_name"]):
+    """ roi_difference plots and tests for differences between rois
+    """
+    # get D regions alone?
+    names = df.roi_name.values.astype(str)
+    mask_roi = np.char.startswith(names, roi)
+
+    # add a new column determining side (hemisphere)
+    df["side"] = df["roi_name"].str[2]
+
+    # add a column determining anterior posterior
+    mask_anteriors = np.char.endswith(names, "A")
+    df["AP"] = ""
+    df["AP"].loc[mask_anteriors] = "A"
+    df["AP"].loc[np.logical_not(mask_anteriors)] = "P"
+
+    # add a new column that defines the index assigned to the region
+    # for D2 it will be 2, for D3 it will be 3
+    df["sub_roi_index"] = df["roi_name"].str[1]
+
+    # add a new column determining side (hemisphere)
+    df["side"] = df["roi_name"].str[2]
+        
+    # get Ds 
+    DD_D = df.loc[(mask_roi)]
+    # get the specific region
+    if sub_roi is not None:
+        DD_D = DD_D.loc[DD_D.sub_roi_index == sub_roi]
+
+    # barplots 
+    plt.figure()
+    ax = sns.barplot(DD_D.loc[(df.cond_name != "rest")], x = xvar, y = depvar, 
+                    errwidth=0.5, errorbar = "se", hue = hue)
+    plt.xticks(rotation = 90)
+    anov = AnovaRM(data=df, depvar=depvar,
+                  subject='sn', within=var, aggregate_func=np.mean).fit()
+    return anov
 
 
 # UNDER CONSTRUCTION

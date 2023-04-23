@@ -437,6 +437,7 @@ def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regula
             if v_labels is not None:
                 ax.text(v[0,i]*1.05,v[1,i]*1.05,v_labels[i],horizontalalignment='center',verticalalignment='center')
     return
+<<<<<<< HEAD
 
 def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
     ax = plt.gca(projection='3d')
@@ -444,6 +445,15 @@ def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 're
     ax.set_box_aspect((1, 1, 1))
     texts = []
 
+=======
+
+def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
+    ax = plt.gca(projection='3d')
+    ax.scatter(x,y, z,s=70,c=colors)
+    ax.set_box_aspect((1, 1, 1))
+    texts = []
+
+>>>>>>> 0584f9ab0498d5e80666f89750072a434aa8a214
     for i,l in enumerate(label):
         text = ax.text(
                     x[i] + 0.001,

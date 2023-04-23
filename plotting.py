@@ -47,7 +47,7 @@ def prep_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
     
     return g_df
 
-def annotate(dataframe, labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
+def annotate(dataframe, x = "X", y = "Y", labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
     """
     annotate data points in the scatterplot
     Args:
@@ -63,8 +63,8 @@ def annotate(dataframe, labels = 'cond_num', text_size = 'small', text_weight = 
         labels = dataframe[labels]
     for i,d in dataframe.iterrows():   
         text = plt.text(
-                        d.X+0.001, 
-                        d.Y, 
+                        d[x]+0.001, 
+                        d[y], 
                         s = labels.loc[i],
                         horizontalalignment='left', 
                         size=text_size, 
@@ -405,11 +405,11 @@ def plot_MDS(x, y, Dinf, colors_D, text_size = 'small', text_weight = 'regular')
     
     plt.scatter(x, y, s=100, c = colors_D)
     texts = []
-    for i,d in Dinf.iterrows():  
+    for i,d in enumerate(list(Dinf.index)): 
         text = plt.text(
                         x[i] + 0.001, 
                         y[i], 
-                        s = Dinf['region_name'].loc[i],
+                        s = Dinf['region_name'].loc[d],
                         horizontalalignment='left', 
                         size=text_size, 
                         weight=text_weight

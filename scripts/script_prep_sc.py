@@ -105,8 +105,6 @@ def get_summary_conn(dataset = "WMFS",
 
 
 if __name__ == "__main__":
-    #####################################################
-    print("connectivity for hierarchical parcellation: Regression")
     D = get_summary_conn(dataset = "WMFS", 
                         ses_id = 'ses-02', 
                         cerebellum_roi = "NettekovenSym68c32", 
@@ -122,7 +120,6 @@ if __name__ == "__main__":
     D = ra.run_regress(D,fit_intercept=True)
 
     D.to_csv(out_dir + '/ROI_NettekovenSym68c32_conn_reg.tsv',sep='\t')
-    #####################################################
 
 
 

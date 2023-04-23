@@ -340,6 +340,98 @@ def get_effect_reliability_summary(smooth = True, verbose = False, subtract_mean
     D = pd.concat([D_fs, D_suit], axis = 0)
     return D
 
+def plot_overlap_enc_ret_suit(subj = "group", 
+                        smooth = False, 
+                        scale = None, 
+                        type = "CondAll", 
+                        save_svg = False, 
+                        ses_id = "ses-02",
+                        verbose = False, 
+                        threshold = None):
+    """
+    """
+
+    # get dataset
+    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas="SUIT3",
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type,  
+                                    smooth = smooth, 
+                                    verbose = verbose)
+    # calculate enc and retrieval contrasts
+    # get indices for all the enc contrasts
+    idx_enc = info.phase == 0
+
+    # get indices for all retrieval contrasts
+    idx_ret = info.phase == 1
+
+    enc_contrast = np.nanmean(data[0, idx_enc, :], axis = 0)
+    ret_contrast = np.nanmean(data[0, idx_ret, :], axis = 0)
+
+
+    # do the rgba map
+
+    data=np.c_[enc_contrast,
+               np.zeros(enc_contrast.shape),
+               ret_contrast].T # Leave the green gun empty 
+    atlas, a_info = am.get_atlas('SUIT3',gl.atlas_dir)
+    Nii = atlas.data_to_nifti(data)
+    data = suit.vol_to_surf(Nii,space='SUIT')
+    rgb = suit.flatmap.map_to_rgb(data,scale=scale,threshold=threshold)
+    ax = suit.flatmap.plot(rgb,overlay_type='rgb', colorbar = True)
+    return ax
+
+def plot_overlap_enc_ret_fs32k(subj = "group", 
+                        smooth = False, 
+                        scale = None, 
+                        type = "CondAll", 
+                        save_svg = False, 
+                        ses_id = "ses-02",
+                        verbose = False, 
+                        threshold = None):
+    """
+    """
+
+    # get dataset
+    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas="fs32k",
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type,  
+                                    smooth = smooth, 
+                                    verbose = verbose)
+    # calculate enc and retrieval contrasts
+    # get indices for all the enc contrasts
+    idx_enc = info.phase == 0
+
+    # get indices for all retrieval contrasts
+    idx_ret = info.phase == 1
+
+    enc_contrast = np.nanmean(data[0, idx_enc, :], axis = 0)
+    ret_contrast = np.nanmean(data[0, idx_ret, :], axis = 0)
+
+    # get the data into surface
+    atlas, a_info = am.get_atlas('fs32k',gl.atlas_dir)
+    enc_cifti = atlas.data_to_cifti(enc_contrast.reshape(-1, 1).T)
+    ret_cifti = atlas.data_to_cifti(ret_contrast.reshape(-1, 1).T)
+
+    # get the lists of data for each hemi
+    enc_list = nt.surf_from_cifti(enc_cifti)
+    ret_list = nt.surf_from_cifti(ret_cifti)
+
+    ax = []
+    for i,hemi in enumerate(['L', 'R']):
+        plt.figure()
+        data=np.c_[enc_list[i].T,
+                np.zeros(ret_list[i].T.shape),
+                ret_list[i].T] # Leave the green gun empty 
+
+        # plt.subplot(1,2,i+1)
+        rgb = suit.flatmap.map_to_rgb(data,scale,threshold=threshold)
+        ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
+    return ax
+
 def plot_overlap_cerebellum(subject = "group", 
                             phase = 0,
                             smooth = False, 
@@ -602,4 +694,22 @@ def plot_contrast_cortex(subject, phase, effect, smooth = True, save_svg = False
     return ax
 
 if __name__=="__main__":
+
+    ax = plot_overlap_enc_ret_suit(subj = "group", 
+                        smooth = False, 
+                        type = "CondAll", 
+                        save_svg = False, 
+                        ses_id = "ses-02",
+                        verbose = False, 
+                        scale = [0.05,1,0.05], 
+                        threshold = [0.05,1,0.1])
+
+    ax2 = plot_overlap_enc_ret_fs32k(subj = "group", 
+                        smooth = False, 
+                        scale = [0.05,1,0.05], 
+                        type = "CondAll", 
+                        save_svg = False, 
+                        ses_id = "ses-02",
+                        verbose = False, 
+                        threshold = [0.05,1,0.1])
     pass

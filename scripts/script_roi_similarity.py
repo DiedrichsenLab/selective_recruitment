@@ -54,8 +54,12 @@ from scipy.linalg import solve, pinv
 from scipy.spatial import procrustes
 from numpy.linalg import eigh
 
+import rsatoolbox as rsa
+
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
+# null: there is no difference between D rois 
+# alternative:
 
 def calc_corr_per_load(atlas_space = "SUIT3", 
                         subj = None,
@@ -306,69 +310,6 @@ def integrate_subparcels(atlas_space = "SUIT3", label = "NettekovenSym68c32", LR
     return
 
 
-def test_parcellation(atlas_space = "SUIT3", label = "NettekovenSym68c32integLR"): 
-    """
-    Testing parcellations created with integrate_subparcels
-    """
-    Nii = nb.load(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii")
-    data = suit.vol_to_surf(Nii,space='SUIT', stats="mode")
-    
-
-    # get the lookuptable
-    idx_lable, colors, lablenames = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
-    # adding 0
-    lablenames.insert(0, '0')
-    # adding color for 0
-    color0 = np.array([0, 0, 0])
-    colors = np.vstack([color0, colors])
-    colors = np.hstack([colors, np.ones([colors.shape[0], 1])])
-
-    cmap = LinearSegmentedColormap.from_list("my_colors", colors)
-
-    gii = suit.flatmap.make_label_gifti(
-                    data,
-                    anatomical_struct='Cerebellum',
-                    label_names=lablenames,
-                    # column_names=[],
-                    label_RGBA=colors
-                    )
-
-    nb.save(gii, "test.label.gii")
-
-    return
-
-
-def est_G(Y, X=None, S=None):
-    """
-    Obtains a crossvalidated estimate of G
-    Y = Z @ U + X @ B + E, where var(U) = G
-
-    Parameters:
-        Y (numpy.ndarray)
-            Activity data
-        Z (numpy.ndarray)
-            2-d: Design matrix for conditions / features U
-            1-d: condition vector
-        part_vec (numpy.ndarray)
-            Vector indicating the partition number
-        X (numpy.ndarray)
-            Fixed effects to be removed
-        S (numpy.ndarray)
-
-    Returns:
-        G_hat (numpy.ndarray)
-            n_cond x n_cond matrix
-        Sig (numpy.ndarray)
-            n_cond x n_cond noise estimate per block
-
-    """
-
-    n_channel , n_cond = Y.shape
-    G = Y @ Y.T 
-
-    return G
-
-
 def get_region_info(label = 'NettekovenSym68c32AP'):
     # get the roi numbers of Ds only
     idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
@@ -399,62 +340,50 @@ def get_region_info(label = 'NettekovenSym68c32AP'):
 
     return Dinfo, D_indx, colors_D
 
-
-def calc_G_group(center = False, reorder = ['side', 'anterior']):
-    """
-    creating MDS plots with conditions as axes
-    """
-    # TODO: Goal: To investigate the activity profiles of different regions. In other words, how similar those regions are.
-    # TODO: Get the similarity between regions. Use the variance covariance between activity profiles of regions wthin subjects
-    # preparing the data and atlases for all the structures
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-
-    # get the data tensor
-    tensor, info, _ = ds.get_dataset(gl.base_dir,"WMFS",atlas="SUIT3",sess="ses-02",type='CondAll', info_only=False)
-
-    # create atlas object
-    atlas_suit, _ = am.get_atlas("SUIT3",gl.atlas_dir)
-
-    # make the label name for cerebellar parcellation
-    lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-NettekovenSym68c32AP_space-SUIT_dseg.nii"
-
-    # get info for D regions
-    Dinfo, D_indx, colors_D = get_region_info(label = 'NettekovenSym68c32AP')
-    # get parcels in the atlas
-
-    label_vec, labels = atlas_suit.get_parcel(lable_file)
-    # average data within parcels
-    ## dimensions will be #subjects-by-#numberCondition-by-#region
-    parcel_data, labels = ds.agg_parcels(tensor, label_vec, fcn=np.nanmean) 
-
-    # get the parcel data corresponding to Ds
-    parcel_data = parcel_data[:, :, D_indx]
-
-    # get different dimensions of the data
-    n_subj = parcel_data.shape[0]
-    n_cond = parcel_data.shape[1]
-    n_region = parcel_data.shape[2]
-    # calculate average across subject
-    data_final = np.nanmean(parcel_data, axis = 0)
-    G = est_G(data_final.T)
-    # pcm.plot_Gs(G[np.newaxis, ...],grid = None, labels=None)
-
-    W, Glam = pcm.classical_mds(G,contrast=None,align=None,thres=0)
-
-    Ginf=Dinfo.copy()
-    if reorder:
-        Ginf=Ginf.sort_values(reorder)
-        ind=Ginf.index.to_numpy()
-        G=G[ind,:][:,ind]
-        Ginf=Ginf.reset_index()
+def get_region_info_all(label = 'NettekovenSym68c32AP'):
+    # get the roi numbers of Ds only
+    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
     
+    
+    # D_indx = [label_names.index(name) for name in label_names if "D" in name]
+    D_indx = [label_names.index(name) for name in label_names]
+    D_name = [name for name in label_names]
 
-    return G, W, Glam, Ginf, colors_D
+    # get the colors of Ds
+    colors_D = colors[D_indx, :]
 
-def calc_G(center = False, 
-           subj = None, 
+    D_list = []
+    for rr, reg in enumerate(D_indx):
+        reg_dict = {}
+        reg_dict['region'] = reg
+        reg_dict['region_name'] = D_name[rr]
+        reg_dict['region_id'] = rr
+        if 'L' in label_names[reg]:
+            reg_dict['side'] = 'L'
+        if 'R' in label_names[reg]:
+            reg_dict['side'] = 'R'
+        if 'A' in label_names[reg]:
+            reg_dict['anterior'] = True
+        if 'P' in label_names[reg]:
+            reg_dict['anterior'] =False
+        D_list.append(pd.DataFrame(reg_dict, index=[rr]))
+    Dinfo = pd.concat(D_list)
+
+    return Dinfo, D_indx, colors_D
+
+
+# def calc_dist():
+#     """
+#     """
+#     data = rsa.data.Dataset(numpy.random.rand(10, 6))
+#     return
+
+def calc_dist(center = False, 
+           subj = None,
+           type = "CondAll",  
            label = 'NettekovenSym68c32AP', 
-           reorder = ['side', 'anterior']):
+           reorder = ['side', 'anterior'], 
+           do_D = False):
     """
     """
     # preparing the data and atlases for all the structures
@@ -463,7 +392,130 @@ def calc_G(center = False,
     # get the data tensor
     tensor, info, _ = ds.get_dataset(gl.base_dir, subj = subj,
                                      dataset="WMFS",atlas="SUIT3",
-                                     sess="ses-02",type='CondAll', info_only=False)
+                                     sess="ses-02",type=type, info_only=False)
+
+    # create atlas object
+    atlas_suit, _ = am.get_atlas("SUIT3",gl.atlas_dir)
+
+    # make the label name for cerebellar parcellation
+    lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii"
+
+    
+    # get parcels in the atlas
+    label_vec, labels = atlas_suit.get_parcel(lable_file)
+    # average data within parcels
+    ## dimensions will be #subjects-by-#numberCondition-by-#region
+    parcel_data, labels = ds.agg_parcels(tensor, label_vec, fcn=np.nanmean) 
+
+    # get the parcel data corresponding to Ds
+    # get info for D regions
+    Dinfo, D_indx, colors_D = get_region_info(label = label)
+    parcel_data = parcel_data[:, :, D_indx]
+
+    # data = rsa.data.Dataset(np.random.rand(10, 6)) # 10 random observations of 6 channels
+
+    # get different dimensions of the data
+    n_subj = parcel_data.shape[0]
+    n_cond = parcel_data.shape[1]
+    n_region = parcel_data.shape[2]
+
+    # create rsa dataset objects 
+    data_rsa = []
+    for s in range(n_subj):
+        des = {'session': 1, 'subj': s}
+        chn_des = {'conds': info.cond_name.values}
+        obs_des = {'voxels': Dinfo.region_name.values}
+
+        data_rsa.append(rsa.data.Dataset(measurements=parcel_data[s, :, :].T,
+                                descriptors=des,
+                                obs_descriptors=obs_des,
+                                channel_descriptors=chn_des))
+
+    # calculate euclidean distance for each subject
+    ## distances between the activity profiles of subregions of D
+    RDM_euc = rsa.rdm.calc_rdm(data_rsa, descriptor='voxels')
+    rdms_ = rsa.rdm.RDMs(RDM_euc.dissimilarities,
+                rdm_descriptors={'name': np.array([f"RDM{i}"
+                                                    for i in range(RDM_euc.n_rdm)])}
+                )
+
+    fig, ax, ret_val = rsa.vis.show_rdm(RDM_euc)
+    # rsa.vis.rdm_comparison_scatterplot(rdms_)
+    return 
+
+def calc_G(center = False, 
+           subj = None,
+           type = "CondAll",  
+           label = 'NettekovenSym68c32AP', 
+           reorder = ['side', 'anterior'], 
+           do_D = False):
+    """
+    """
+    # preparing the data and atlases for all the structures
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+
+    # get the data tensor
+    tensor, info, _ = ds.get_dataset(gl.base_dir, subj = subj,
+                                     dataset="WMFS",atlas="SUIT3",
+                                     sess="ses-02",type=type, info_only=False)
+
+    # create atlas object
+    atlas_suit, _ = am.get_atlas("SUIT3",gl.atlas_dir)
+
+    # make the label name for cerebellar parcellation
+    lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii"
+
+    
+    # get parcels in the atlas
+    label_vec, labels = atlas_suit.get_parcel(lable_file)
+    # average data within parcels
+    ## dimensions will be #subjects-by-#numberCondition-by-#region
+    parcel_data, labels = ds.agg_parcels(tensor, label_vec, fcn=np.nanmean) 
+
+    # get the parcel data corresponding to Ds
+    if do_D:
+        # get info for D regions
+        Dinfo, D_indx, colors_D = get_region_info(label = label)
+        parcel_data = parcel_data[:, :, D_indx]
+    else:
+        # get info for D regions
+        Dinfo, D_indx, colors_D = get_region_info_all(label = label)
+        Dinfo = Dinfo[1:]
+
+    # get different dimensions of the data
+    n_subj = parcel_data.shape[0]
+    n_cond = parcel_data.shape[1]
+    n_region = parcel_data.shape[2]
+
+    # loop over subjects and estimate non-cross-validated G
+    G = np.zeros([n_subj, parcel_data.shape[2], parcel_data.shape[2]])
+    G_vec = np.zeros([n_subj, int((n_region*(n_region-1))/2)+n_region])
+    for s in range(n_subj):
+        # estimate non-cross validated G and put it inside the array
+        data_subj = parcel_data[s, :, :].T
+        n_channel , n_cond = data_subj.shape
+        
+        # Gs are symmetric
+        G_tmp = data_subj @ data_subj.T 
+
+        # get the upper triangular part
+        triu_idx = np.triu_indices(n_region, k = 0)
+        G_vec[s, :] = G_tmp[triu_idx]
+
+        G[s, :, :] = G_tmp
+    return G, G_vec, Dinfo
+
+def calc_G_cv(center = False, 
+              subj = None, 
+              label = 'NettekovenSym68c32AP',
+              type = "CondRun"):
+    # preparing the data and atlases for all the structures
+    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
+
+    # get the data tensor
+    tensor, info, _ = ds.get_dataset(gl.base_dir, subj = subj,
+                                     dataset="WMFS",atlas="SUIT3",
+                                     sess="ses-02",type=type, info_only=False)
 
     # create atlas object
     atlas_suit, _ = am.get_atlas("SUIT3",gl.atlas_dir)
@@ -478,7 +530,7 @@ def calc_G(center = False,
     label_vec, labels = atlas_suit.get_parcel(lable_file)
     # average data within parcels
     ## dimensions will be #subjects-by-#numberCondition-by-#region
-    parcel_data, labels = ds.agg_parcels(tensor, label_vec, fcn=np.nanmean) 
+    parcel_data, labels = ds.agg_parcels(tensor, label_vec, fcn=np.nanmean)
 
     # get the parcel data corresponding to Ds
     parcel_data = parcel_data[:, :, D_indx]
@@ -488,17 +540,31 @@ def calc_G(center = False,
     n_cond = parcel_data.shape[1]
     n_region = parcel_data.shape[2]
 
+    # get z
+    regions = Dinfo.region.values
+    Z = pcm.matrix.indicator(Dinfo.region)
+    # get partition vector
+    part_vec = np.unique(info.run.values)
+
     # loop over subjects and estimate non-cross-validated G
     G = np.zeros([n_subj, parcel_data.shape[2], parcel_data.shape[2]])
     for s in range(n_subj):
         # estimate non-cross validated G and put it inside the array
-        data_subj = parcel_data[s, :, :]
-        G[s, :, :] = est_G(data_subj.T)
-    return G, Dinfo
+        data_subj = parcel_data[s, :, :].T
 
+        # need to rearrange data
 
+        G_cv = pcm.est_G_crossval(data_subj, Z, part_vec, X=None, S=None)
+        G[s, :, :] = G_cv
+
+    return
 if __name__ == "__main__":
-    calc_G_group(center = False, reorder = ['side', 'anterior'])
+    calc_dist(center = False, 
+                        subj = None, 
+                        label = 'NettekovenSym68c32AP', 
+                        do_D = True)
+
+    print("hello")
     pass
 
 

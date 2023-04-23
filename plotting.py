@@ -25,7 +25,7 @@ def prep_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
     gets the mean across subjects (data point) and std of residuals
     THIS ONLY WORKS FOR WM dataset
     Args:
-        dataframe (pd.DataFrame) - dataframe with residuals info 
+        dataframe (pd.DataFrame) - dataframe with residuals info
         agg_kw (dict) - dictionary determining info for dataframe aggregation
         Example agg_kw: {'load': 'first',
                          'phase': 'first',
@@ -38,13 +38,13 @@ def prep_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
     # group by condition
     grouped = dataframe.groupby([groupby])
     g_df = grouped.agg(agg_kw)
-    
+
     g_std = grouped.std(numeric_only=True)
     g_df["Y_CI"] = grouped.Y.apply(sps.sem) * 1.96
     g_df["X_CI"] = grouped.X.apply(sps.sem)*1.96
     g_df['err'] = g_std[error]
-    
-    
+
+
     return g_df
 
 def annotate(dataframe, labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
@@ -54,20 +54,20 @@ def annotate(dataframe, labels = 'cond_num', text_size = 'small', text_weight = 
     dataframe (pd.DataFrame)
     labels (str,series) - column of the dataframe that is to be used as label
         or dict that maps the index of the dataframe to a label
-    text_size (str) 
+    text_size (str)
     text_weight (str)
-    labels (str) 
+    labels (str)
     """
     texts = []
     if labels is str:
         labels = dataframe[labels]
-    for i,d in dataframe.iterrows():   
+    for i,d in dataframe.iterrows():
         text = plt.text(
-                        d.X+0.001, 
-                        d.Y, 
+                        d.X+0.001,
+                        d.Y,
                         s = labels.loc[i],
-                        horizontalalignment='left', 
-                        size=text_size, 
+                        horizontalalignment='left',
+                        size=text_size,
                         weight=text_weight
                         )
         texts.append(text)
@@ -117,9 +117,9 @@ def plot_parcellation(parcellation, roi_name):
     # convert non-selected labels to nan
     roi_flat[roi_flat != float(roi_num)] = np.nan
     # plot the roi
-    ax = flatmap.plot(roi_flat, render="plotly", 
-                      hover='auto', colorbar = False, 
-                      bordersize = 1.5, overlay_type='label', 
+    ax = flatmap.plot(roi_flat, render="plotly",
+                      hover='auto', colorbar = False,
+                      bordersize = 1.5, overlay_type='label',
                       label_names=label_info, cmap = cmap)
 
     return ax, roi_num
@@ -127,8 +127,8 @@ def plot_parcellation(parcellation, roi_name):
 def make_scatterplot_depricated(dataframe, hue = "phase", style = "recall", label = "load", height = 4, aspect = 1):
     """
     make scatterplot
-    uses FacetGrid 
-    Args: 
+    uses FacetGrid
+    Args:
     dataframe (pd.DataFrame) - output from prep_df
     hue (str)      - column name to be used to determine color
     style (str)    - column name to be used to determine shape of the marker
@@ -138,23 +138,23 @@ def make_scatterplot_depricated(dataframe, hue = "phase", style = "recall", labe
     """
     g = sns.FacetGrid(dataframe,  height=height, aspect=aspect)
     # do the scatter plot
-    g.map_dataframe(sns.scatterplot, x="X", y="Y", 
+    g.map_dataframe(sns.scatterplot, x="X", y="Y",
                                     style = style, hue = hue, s = 100)
     g.add_legend()
 
     # fit the regression on top of the scatterplot
-    g.map_dataframe(sns.regplot, x="X", y="Y", 
-                        fit_reg=True, 
-                        scatter_kws={"s": 0}, # size is set to 0 so that it doesn't cover the markers created in the scatterplot step 
+    g.map_dataframe(sns.regplot, x="X", y="Y",
+                        fit_reg=True,
+                        scatter_kws={"s": 0}, # size is set to 0 so that it doesn't cover the markers created in the scatterplot step
                         line_kws={'label':"Linear Reg", "color": 'grey'})
 
-    # put the errorbars in 
-    g.map(plt.errorbar, x = dataframe['X'], 
-                        y = dataframe['Y'], 
+    # put the errorbars in
+    g.map(plt.errorbar, x = dataframe['X'],
+                        y = dataframe['Y'],
                         yerr = dataframe['err'],
-                        elinewidth=1, 
+                        elinewidth=1,
                         fmt='none', # no marker will be used when plotting the error bars
-                        color='grey', 
+                        color='grey',
                         ecolor='0.9'
                 )
     # set labels
@@ -169,8 +169,8 @@ def make_scatterplot(dataframe, split='cond_num', fit_line = True, labels=None,
         colors=None,markers=None):
     """
     make scatterplot
-    Args: 
-    dataframe (pd.DataFrame) - 
+    Args:
+    dataframe (pd.DataFrame) -
             entire dataframe with individual subject data and fitted slopes and intercepts
     split (str) - column name indicating the different conditions to be plotted
     labels(dict)    - column name to be used to determine shape of the marker
@@ -185,28 +185,28 @@ def make_scatterplot(dataframe, split='cond_num', fit_line = True, labels=None,
              'slope':np.mean,
              'intercept':np.mean}
     df = grouped.agg(agg_kw)
-    
+
     df["Y_CI"] = grouped.Y.apply(sps.sem) * 1.96
     df["X_CI"] = grouped.X.apply(sps.sem)*1.96
     df['X_err'] = grouped.res.apply(sps.sem)*1.96
 
-    # add  the appropriate errorbars  
-    plt.errorbar(x = df['X'], 
-                 y = df['Y'], 
+    # add  the appropriate errorbars
+    plt.errorbar(x = df['X'],
+                 y = df['Y'],
                  yerr = df['X_err'],
-                 elinewidth=2, 
+                 elinewidth=2,
                 fmt='none', # no marker will be used when plotting the error bars
-                color=(0.3,0.3,0.3), 
+                color=(0.3,0.3,0.3),
                 ecolor=(0.5,0.5,0.5)
                 )
 
-    # Plot average regression line 
+    # Plot average regression line
     if fit_line:
         xrange = np.array([df['X'].min(),df['X'].max()])
         ypred = xrange*df.slope.mean()+df.intercept.mean()
         plt.plot(xrange,ypred,'k-')
 
-    # Make scatterplot, determining the markers and colors from the dictionary 
+    # Make scatterplot, determining the markers and colors from the dictionary
     ax = sns.scatterplot(data=df, x='X', y='Y', style = split, hue = split, s = 100,legend=None,markers=markers,palette=colors)
 
     # set labels
@@ -214,9 +214,9 @@ def make_scatterplot(dataframe, split='cond_num', fit_line = True, labels=None,
     ax.set_ylabel('Cerebellar Activation (a.u.)')
 
     # get labels for each data point
-    annotate(df, 
-            text_size = 'small', 
-            text_weight = 'regular', 
+    annotate(df,
+            text_size = 'small',
+            text_weight = 'regular',
             labels = df[split].map(labels))
     return
 
@@ -233,7 +233,7 @@ def plot_cerebellum_activation(dataset, ses_id, subject, contrast_name):
 
     # create an instance of WMFS class
     Dataset = fdata.get_dataset_class(gl.base_dir, dataset= dataset)
-    # get info 
+    # get info
     info = Dataset.get_info(ses_id,"CondAll")
 
     # get participants
@@ -243,7 +243,7 @@ def plot_cerebellum_activation(dataset, ses_id, subject, contrast_name):
     path_to_cifti = Dataset.data_dir.format(subject) + f'/{subject}_space-SUIT3_{ses_id}_CondAll.dscalar.nii'
     cifti_img = nb.load(path_to_cifti)
 
-    # get the numpy array 
+    # get the numpy array
     img = cifti_img.get_fdata()
     # get info for the contrast
     info_con = info.loc[info.names == contrast_name]
@@ -257,7 +257,7 @@ def plot_cerebellum_activation(dataset, ses_id, subject, contrast_name):
     img_nii = atlas_cereb.data_to_nifti(img_con.T)
     img_flat = flatmap.vol_to_surf([img_nii], stats='nanmean', space = 'SUIT')
 
-    # plot 
+    # plot
     ax = flatmap.plot(data=img_flat, render="plotly", cmap = "coolwarm", colorbar = True, bordersize = 1.5, cscale=[-0.2, 0.2])
     # ax.show()
     return ax
@@ -274,7 +274,7 @@ def plot_cortex_activation(dataset, ses_id, subject, contrast_name):
 
     # create an instance of WMFS class
     Dataset = fdata.get_dataset_class(gl.base_dir, dataset= dataset)
-    # get info 
+    # get info
     info = Dataset.get_info(ses_id,"CondAll")
 
     # get participants
@@ -283,10 +283,10 @@ def plot_cortex_activation(dataset, ses_id, subject, contrast_name):
 
     path_to_cifti = Dataset.data_dir.format(subject) + f'/{subject}_space-fs32k_{ses_id}_CondAll.dscalar.nii'
     cifti_img = nb.load(path_to_cifti)
-    
+
     # get the hemispheres
     cifti_list = nt.surf_from_cifti(cifti_img)
-        
+
     # get info for the contrast
     info_con = info.loc[info.names == contrast_name]
     idx = info_con.reg_id.values[0]
@@ -296,38 +296,38 @@ def plot_cortex_activation(dataset, ses_id, subject, contrast_name):
         img = cifti_list[h]
         # get the numpy array corresponding to the contrast
         img_con = img[idx-1, :].reshape(-1, 1)
-        
+
         surf_hemi.append(gl.atlas_dir + f"/tpl-fs32k/tpl_fs32k_hemi-{hemi}_inflated.surf.gii")
-        
+
         fig_hemi.append(plotting.view_surf(
                                         surf_hemi[h], img_con, colorbar=True,
                                         threshold=None, cmap="coolwarm" , vmax = 1
                                         ))
     return fig_hemi
 
-def plot_connectivity_weight(roi_name = "D2R", 
-                             method = "L2Regression", 
-                             cortex_roi = "Icosahedron1002", 
+def plot_connectivity_weight(roi_name = "D2R",
+                             method = "L2Regression",
+                             cortex_roi = "Icosahedron1002",
                              cerebellum_roi = "NettekovenSym68c32",
-                             cerebellum_atlas = "SUIT3", 
-                             log_alpha = 8, 
+                             cerebellum_atlas = "SUIT3",
+                             log_alpha = 8,
                              dataset_name = "MDTB",
-                             cmap = "coolwarm",  
+                             cmap = "coolwarm",
                              ses_id = "ses-s1"):
     """
     """
     # get connectivity weight maps for the selected region
-    cifti_img = wplot.get_weight_map(method = method, 
-                                    cortex_roi = cortex_roi, 
+    cifti_img = wplot.get_weight_map(method = method,
+                                    cortex_roi = cortex_roi,
                                     cerebellum_roi = cerebellum_roi,
-                                    cerebellum_atlas = cerebellum_atlas, 
-                                    log_alpha = log_alpha, 
-                                    dataset_name = dataset_name, 
+                                    cerebellum_atlas = cerebellum_atlas,
+                                    log_alpha = log_alpha,
+                                    dataset_name = dataset_name,
                                     ses_id = ses_id,
-                                    type = "dscalar" 
+                                    type = "dscalar"
                                     )
 
-    # get the cortical weight map corresponding to the current 
+    # get the cortical weight map corresponding to the current
     ## get parcel axis from the cifti image
     parcel_axis = cifti_img.header.get_axis(0)
     ## get the name of the parcels in the parcel_axis
@@ -344,18 +344,18 @@ def plot_connectivity_weight(roi_name = "D2R",
         # get the numpy array corresponding to the contrast
         img_data = weight_roi_list[h]
         surf_hemi.append(gl.atlas_dir + f"/tpl-fs32k/tpl_fs32k_hemi-{hemi}_inflated.surf.gii")
-        
+
         fig_hemi.append(plotting.view_surf(
-                                        surf_hemi[h], img_data, colorbar=True, 
-                                        cmap=cmap, vmax = np.nanmax(img_data), 
+                                        surf_hemi[h], img_data, colorbar=True,
+                                        cmap=cmap, vmax = np.nanmax(img_data),
                                         vmin = np.nanmin(img_data)
                                         ))
     return fig_hemi
 
-def roi_difference(df, 
-             xvar = "cond_name", 
-             hue = "roi_name", 
-             depvar = "Y", 
+def roi_difference(df,
+             xvar = "cond_name",
+             hue = "roi_name",
+             depvar = "Y",
              sub_roi = None,
              roi = "D",
              var = ["cond_name", "roi_name"]):
@@ -380,42 +380,51 @@ def roi_difference(df,
 
     # add a new column determining side (hemisphere)
     df["side"] = df["roi_name"].str[2]
-        
-    # get Ds 
+
+    # get Ds
     DD_D = df.loc[(mask_roi)]
     # get the specific region
     if sub_roi is not None:
         DD_D = DD_D.loc[DD_D.sub_roi_index == sub_roi]
 
-    # barplots 
+    # barplots
     plt.figure()
-    ax = sns.barplot(DD_D.loc[(df.cond_name != "rest")], x = xvar, y = depvar, 
-                    errwidth=0.5, errorbar = "se", hue = hue)
+    ax = sns.lineplot(data=DD_D.loc[(df.cond_name != "rest")], x = xvar, y = depvar,
+                    errwidth=0.5, hue = hue)
     plt.xticks(rotation = 90)
     anov = AnovaRM(data=df, depvar=depvar,
                   subject='sn', within=var, aggregate_func=np.mean).fit()
     return anov
 
+def calc_mds(X,center=True,k):
+    """
+    calculate MDS for the given matrix
+    Args:
+    X (np.array) - matrix for which MDS is to be calculated
+    Returns:
+    mds (np.array) - MDS coordinates
+    """
+    if center:
+        X=X-X.mean(axis=0)
+    W,S,V=np.linalg.svd(X,full_matrices=False)
 
-# UNDER CONSTRUCTION
-def plot_MDS(x, y, Dinf, colors_D, text_size = 'small', text_weight = 'regular'):
-    """
-    """
+    return W*WS,V
+
+
+def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regular'):
     fig = plt.figure()
-    
-    plt.scatter(x, y, s=100, c = colors_D)
+    plt.scatter(x, y, s=100, c = colors)
     texts = []
-    for i,d in Dinf.iterrows():  
+    for i,l in enumerate(label):
         text = plt.text(
-                        x[i] + 0.001, 
-                        y[i], 
-                        s = Dinf['region_name'].loc[i],
-                        horizontalalignment='left', 
-                        size=text_size, 
+                        x[i] + 0.001,
+                        y[i],
+                        s = l,
+                        horizontalalignment='left',
+                        size=text_size,
                         weight=text_weight
                         )
         texts.append(text)
-
     adjust_text(texts) # make sure you have installed adjust_text
     return
 
@@ -426,31 +435,32 @@ def annotate2(dataframe, xlabel, ylabel, labels = 'cond_num', text_size = 'small
     dataframe (pd.DataFrame)
     labels (str,series) - column of the dataframe that is to be used as label
         or dict that maps the index of the dataframe to a label
-    text_size (str) 
+    text_size (str)
     text_weight (str)
-    labels (str) 
+    labels (str)
     """
     texts = []
     if labels is str:
         labels = dataframe[labels]
-    for i,d in dataframe.iterrows():   
+    for i,d in dataframe.iterrows():
         text = plt.text(
-                        d[xlabel]+0.001, 
-                        d[ylabel], 
+                        d[xlabel]+0.001,
+                        d[ylabel],
                         s = labels.loc[i],
-                        horizontalalignment='left', 
-                        size=text_size, 
+                        horizontalalignment='left',
+                        size=text_size,
                         weight=text_weight
                         )
         texts.append(text)
-
     adjust_text(texts) # make sure you have installed adjust_text
+
+
 def make_scatterplot2(dataframe, xlabel, ylabel, xerr, yerr,  split='cond_num', labels=None,
         colors=None,markers=None):
     """
     make scatterplot
-    Args: 
-    dataframe (pd.DataFrame) - 
+    Args:
+    dataframe (pd.DataFrame) -
             entire dataframe with individual subject data and fitted slopes and intercepts
     split (str) - column name indicating the different conditions to be plotted
     labels(dict)    - column name to be used to determine shape of the marker
@@ -463,7 +473,7 @@ def make_scatterplot2(dataframe, xlabel, ylabel, xerr, yerr,  split='cond_num', 
     agg_kw = {split:'first',
               xlabel:np.mean,ylabel: np.mean}
     df = grouped.agg(agg_kw)
-    
+
     df[f"{xlabel}_CI"] = grouped[xlabel].apply(sps.sem) * 1.96
     df[f"{ylabel}_CI"] = grouped[ylabel].apply(sps.sem)*1.96
 
@@ -473,26 +483,26 @@ def make_scatterplot2(dataframe, xlabel, ylabel, xerr, yerr,  split='cond_num', 
         df['xerr'] = None
     if yerr is not None:
         df['yerr'] = grouped[yerr].apply(sps.sem)*1.96
-    else: 
+    else:
         df['yerr'] = None
 
-    # add  the appropriate errorbars  
-    plt.errorbar(x = df[xlabel], 
-                 y = df[ylabel], 
+    # add  the appropriate errorbars
+    plt.errorbar(x = df[xlabel],
+                 y = df[ylabel],
                 #  yerr = df['xerr'],
                 #  xerr = df['yerr'],
-                 elinewidth=2, 
+                 elinewidth=2,
                  fmt='none', # no marker will be used when plotting the error bars
-                 color=(0.3,0.3,0.3), 
+                 color=(0.3,0.3,0.3),
                  ecolor=(0.5,0.5,0.5)
                 )
 
-    # # Plot average regression line 
+    # # Plot average regression line
     # xrange = np.array([df[xlabel].min(),df['X'].max()])
     # ypred = xrange*df.slope.mean()+df.intercept.mean()
     # plt.plot(xrange,ypred,'k-')
 
-    # Make scatterplot, determining the markers and colors from the dictionary 
+    # Make scatterplot, determining the markers and colors from the dictionary
     ax = sns.scatterplot(data=df, x=xlabel, y=ylabel, style = split, hue = split, s = 100,legend=None,markers=markers,palette=colors)
 
     # set labels
@@ -501,7 +511,7 @@ def make_scatterplot2(dataframe, xlabel, ylabel, xerr, yerr,  split='cond_num', 
 
     # get labels for each data point
     annotate2(df, xlabel=xlabel, ylabel=ylabel,
-            text_size = 'small', 
-            text_weight = 'regular', 
+            text_size = 'small',
+            text_weight = 'regular',
             labels = df[split].map(labels))
     return

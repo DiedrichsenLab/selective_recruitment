@@ -396,27 +396,32 @@ def roi_difference(df,
                   subject='sn', within=var, aggregate_func=np.mean).fit()
     return anov
 
-def calc_mds(X,center=True,k):
+def calc_mds(X,center=True,K=2):
     """
     calculate MDS for the given matrix
     Args:
     X (np.array) - matrix for which MDS is to be calculated
     Returns:
-    mds (np.array) - MDS coordinates
+    W (np.array) - MDS coordinates
+    V (np.array) - direction in column space
     """
     if center:
         X=X-X.mean(axis=0)
     W,S,V=np.linalg.svd(X,full_matrices=False)
+    W = W[:,:K]
+    S = S[:K]
+    V = V[:K,:] # V is already transposed
+    return W*S,V
 
-    return W*WS,V
 
-
-def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regular'):
-    fig = plt.figure()
-    plt.scatter(x, y, s=100, c = colors)
+def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
+    ax = plt.gca()
+    # Scatter plot with axis equal
+    ax.scatter(x, y, s=100, c = colors)
+    ax.axis('equal')
     texts = []
     for i,l in enumerate(label):
-        text = plt.text(
+        text = ax.text(
                         x[i] + 0.001,
                         y[i],
                         s = l,
@@ -426,7 +431,44 @@ def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regula
                         )
         texts.append(text)
     adjust_text(texts) # make sure you have installed adjust_text
+    if vectors is not None:
+        scl=(ax.get_xlim()[1]-ax.get_xlim()[0])/4
+        v = vectors*scl
+
+        for i in range(vectors.shape[1]):
+            ax.quiver(0,0,v[0,i],v[1,i],angles='xy',scale_units='xy',width=0.002,scale=1.0)
+            if v_labels is not None:
+                ax.text(v[0,i]*1.05,v[1,i]*1.05,v_labels[i],horizontalalignment='center',verticalalignment='center')
     return
+
+def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
+    ax = plt.gca(projection='3d')
+    ax.scatter(x,y, z,s=70,c=colors)
+    ax.set_box_aspect((1, 1, 1))
+    texts = []
+
+    for i,l in enumerate(label):
+        text = ax.text(
+                    x[i] + 0.001,
+                    y[i],
+                    z[i],
+                    l,
+                    horizontalalignment='left',
+                    size=text_size,
+                    weight=text_weight
+                    )
+        texts.append(text)
+    adjust_text(texts) # make sure you have installed adjust_text
+    if vectors is not None:
+        scl=(ax.get_xlim()[1]-ax.get_xlim()[0])/4
+        v = vectors*scl
+        for i in range(vectors.shape[1]):
+            ax.quiver(0,0,0,v[0,i],v[1,i],v[2,i],normalize=False)
+            if v_labels is not None:
+                ax.text(v[0,i]*1.05,v[1,i]*1.05,v[2,i]*1.05,v_labels[i],horizontalalignment='center',verticalalignment='center')
+    return
+
+
 
 def annotate2(dataframe, xlabel, ylabel, labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
     """

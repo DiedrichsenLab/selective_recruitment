@@ -77,60 +77,80 @@ def norm_within_category(df, category=['roi_name','sn'], value='Y', norm='zscore
         df[value + '_norm'] = gb.transform(lambda x: (x/x.mean()))
     return df
 
-def plot_roi_differences():
-    df_path = os.path.join(wkdir, "ROI_NettekovenSym68c32_conn_reg.tsv")
-    dd = pd.read_csv(df_path, sep="\t")
-    # print anova results
-    names = dd.roi_name.values.astype(str)
-
-    # add a new column determining side (hemisphere)
-
+def prep_roi_comparison(dd):
     dd["roi_super"] = dd["roi_name"].str[0]
     dd["roi_sub"] = dd["roi_name"].str[1]
     dd["side"] = dd["roi_name"].str[2]
     D=dd.loc[(dd.cond_name != "rest") & (dd.roi_super=='D')]
+    D['sn']=D['sn'].astype(int)
+    D['cond_num']=D.phase*6+(1-D.recall)*3+D.load/2
+    cond_map = D[['cond_num','cond_name']].drop_duplicates()
+    cond_map.sort_values(by='cond_num', inplace=True)
+    return D, cond_map
+
+def plot_roi_differences(D,cond_map):
+    # print anova results
 
     # Make sn column into an integer
-    D['sn']=D['sn'].astype(int)
-    D['cond_num']=D.phase*6+D.recall*3+D.load/2
-    D = norm_within_category(D, category=['roi_name'], value='Y', norm='mean')
+    D = norm_within_category(D, category=['roi_name','sn'], value='Y', norm='mean')
     plt.figure()
+    # Define styles and colors
     d1 = (1,0)
     d2 = (3,3)
+    red =(0.8,0.2,0.2)
+    gray = (0.5,0.5,0.5)
+    lb = (0.2,0.5,1.0)
+    db = (0.0,0.1,0.6)
     ax = sns.lineplot(data=D, x = 'cond_num', y = 'Y_norm', hue = 'roi_name',style='roi_name',
-                palette=['r','b','g','k','r','b','g','k'],
+                palette=[red,gray,lb,db,red,gray,lb,db],
                 dashes=[d1,d1,d1,d1,d2,d2,d2,d2],
                 err_style=None)
-    plt.xticks(rotation = 90)
-    """
-    plt.subplot(1,2,1)
-    sns.lineplot(data=D.loc[D.roi_name=='D3R'],x='cond_name',y='Y',hue='sn',err_style=None)
-    plt.xticks(rotation = 90)
-    plt.subplot(1,2,2)
-    sns.lineplot(data=D.loc[D.roi_name=='D3R'],x='cond_name',y='Y_norm',hue='sn',err_style=None)
-
-    plt.xticks(rotation = 90)
-    """
+    # Find mapping between cond_name and cond_num
+    ax.set_xticks(np.arange(12)+1)
+    ax.set_xticklabels(cond_map.cond_name.values, rotation=45)
     return D
 
 if __name__ == "__main__":
-    D = plot_roi_differences()
+    df_path = os.path.join(wkdir, "ROI_NettekovenSym68c32_conn_reg.tsv")
+    D = pd.read_csv(df_path, sep="\t")
+    D, cond_map = prep_roi_comparison(D)
+    D = plot_roi_differences(D,cond_map)
     anov = AnovaRM(data=D, depvar='Y_norm',
                   subject='sn',
                   within= ["cond_name", "roi_name"],
                   aggregate_func=np.mean).fit()
     print(anov)
+
+
+    plt.figure()
     D = norm_within_category(D, category=['roi_name','sn'], value='Y_norm', norm='mean')
-    A = pd.pivot_table(data=D,index='roi_name',columns='cond_name',values='Y',aggfunc=np.mean)
+    A = pd.pivot_table(data=D,index='roi_name',columns='cond_name',values='Y_norm',aggfunc=np.mean)
     C=A.values
     C=C/np.sqrt((C**2).sum(axis=1,keepdims=True))
     B = C@C.T
-    plt.figure()
-    plt.imshow(B)
-    ax = plt.gca()
-    ax.set_yticklabels(A.index)
 
+    K=3
+    W,V = plotting.calc_mds(A.values,K=K)
+    # phase, load, and recall
+    vs = np.array([[-1, 1,-1, 1,-1,1,-1,1,-1,1,-1,1],
+                  [-1,-1,-1,-1, 0,0, 0,0, 1,1, 1,1],
+                  [1,1, -1, -1, 1, 1, -1, -1,1,1, -1, -1]])
+    vs = vs/np.sqrt((vs**2).sum(axis=1,keepdims=True))
+    proj_vs = V @ vs.T
+    red =(0.8,0.2,0.2)
+    gray = (0.5,0.5,0.5)
+    lb = (0.2,0.5,1.0)
+    db = (0.0,0.1,0.6)
+    pal = [red,red,gray,gray,lb,lb,db,db]
 
-    W,V = plotting.calc_mds(A.values)
-    plotting.plot_MDS(W[:,0],W[:,1],A.index)
+    if K==2:
+        plotting.plot_mds(W[:,0],W[:,1],A.index,
+                          colors=pal,
+                          vectors=proj_vs,
+                          v_labels = ['retrieval','load+','backwards'])
+    elif K==3:
+        plotting.plot_mds3(W[:,0],W[:,1],W[:,2],A.index,
+                            colors=pal,
+                            vectors=proj_vs,
+                            v_labels = ['retrieval','load+','backwards'])
     pass

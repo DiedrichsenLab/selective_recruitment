@@ -222,9 +222,11 @@ def make_scatterplot(dataframe, split='cond_num', fit_line = True, labels=None,
 
 def plot_cerebellum_activation(dataset, ses_id, subject, contrast_name):
     """_summary_
+
     Args:
         subject (_type_): _description_
         contrast_name (_type_): _description_
+
     Returns:
         _type_: _description_
     """
@@ -262,6 +264,7 @@ def plot_cerebellum_activation(dataset, ses_id, subject, contrast_name):
 
 def plot_cortex_activation(dataset, ses_id, subject, contrast_name):
     """_summary_
+
     Args:
         subjcet (_type_): _description_
         contrast_name (_type_): _description_
@@ -410,7 +413,6 @@ def calc_mds(X,center=True,K=2):
     V = V[:K,:] # V is already transposed
     return W*S,V
 
-
 def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
     ax = plt.gca()
     # Scatter plot with axis equal
@@ -437,23 +439,15 @@ def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regula
             if v_labels is not None:
                 ax.text(v[0,i]*1.05,v[1,i]*1.05,v_labels[i],horizontalalignment='center',verticalalignment='center')
     return
-<<<<<<< HEAD
 
 def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
-    ax = plt.gca(projection='3d')
+    # ax = plt.gca(projection='3d')
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
     ax.scatter(x,y, z,s=70,c=colors)
     ax.set_box_aspect((1, 1, 1))
     texts = []
 
-=======
-
-def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
-    ax = plt.gca(projection='3d')
-    ax.scatter(x,y, z,s=70,c=colors)
-    ax.set_box_aspect((1, 1, 1))
-    texts = []
-
->>>>>>> 0584f9ab0498d5e80666f89750072a434aa8a214
     for i,l in enumerate(label):
         text = ax.text(
                     x[i] + 0.001,
@@ -470,7 +464,7 @@ def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 're
         scl=(ax.get_xlim()[1]-ax.get_xlim()[0])/4
         v = vectors*scl
         for i in range(vectors.shape[1]):
-            ax.quiver(0,0,0,v[0,i],v[1,i],v[2,i],normalize=False)
+            ax.quiver(0,0,0,v[0,i],v[1,i],v[2,i],normalize=False, color = "black")
             if v_labels is not None:
                 ax.text(v[0,i]*1.05,v[1,i]*1.05,v[2,i]*1.05,v_labels[i],horizontalalignment='center',verticalalignment='center')
     return

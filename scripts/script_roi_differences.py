@@ -15,6 +15,8 @@ import nibabel as nb
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
+import pickle
+import generativeMRF
 
 from pathlib import Path
 from SUITPy import flatmap
@@ -38,6 +40,8 @@ if not Path(wkdir).exists():
     wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 if not Path(wkdir).exists():
     wkdir = '/Users/jdiedrichsen/Data/wm_cerebellum/selective_recruit'
+
+cortex_dir = '/srv/diedrichsen/data/Cortex/ProbabilisticParcellationModel/Models/Models_03/smoothed'
 
 label_dict = {1: 'Enc2F', 2: 'Ret2F',
               3: 'Enc2B', 4: 'Ret2B',
@@ -88,11 +92,16 @@ def prep_roi_comparison(dd):
     cond_map.sort_values(by='cond_num', inplace=True)
     return D, cond_map
 
-def plot_roi_differences(D,cond_map):
+def plot_roi_differences(D, cond_map, depvar = "Y_norm", var = ["cond_name", "roi_name"]):
     # print anova results
+    
 
     # Make sn column into an integer
     D = norm_within_category(D, category=['roi_name','sn'], value='Y', norm='mean')
+
+    anov = AnovaRM(data=D, depvar=depvar,
+                  subject='sn', within=var, aggregate_func=np.mean).fit()
+    print(anov)
     plt.figure()
     # Define styles and colors
     d1 = (1,0)
@@ -110,47 +119,59 @@ def plot_roi_differences(D,cond_map):
     ax.set_xticklabels(cond_map.cond_name.values, rotation=45)
     return D
 
+def cortex_ana():
+    file = cortex_dir + '/asym_Md_space-fs32k_L_K-17_smooth-1_ses-s1.pickle'
+    with open(file, 'rb') as pickle_file:
+        content = pickle.load(pickle_file)
+    # A = pickle.load(file)
+
+    print("hello")
+    return
+
+
 if __name__ == "__main__":
-    df_path = os.path.join(wkdir, "ROI_NettekovenSym68c32_conn_reg.tsv")
-    D = pd.read_csv(df_path, sep="\t")
-    D, cond_map = prep_roi_comparison(D)
-    D = plot_roi_differences(D,cond_map)
-    anov = AnovaRM(data=D, depvar='Y_norm',
-                  subject='sn',
-                  within= ["cond_name", "roi_name"],
-                  aggregate_func=np.mean).fit()
-    print(anov)
+    cortex_ana()
+    print("hello")
+    # df_path = os.path.join(wkdir, "ROI_NettekovenSym68c32_conn_reg.tsv")
+    # D = pd.read_csv(df_path, sep="\t")
+    # D, cond_map = prep_roi_comparison(D)
+    # D = plot_roi_differences(D,cond_map)
+    # anov = AnovaRM(data=D, depvar='Y_norm',
+    #               subject='sn',
+    #               within= ["cond_name", "roi_name"],
+    #               aggregate_func=np.mean).fit()
+    # print(anov)
 
 
-    plt.figure()
-    D = norm_within_category(D, category=['roi_name','sn'], value='Y_norm', norm='mean')
-    A = pd.pivot_table(data=D,index='roi_name',columns='cond_name',values='Y_norm',aggfunc=np.mean)
-    C=A.values
-    C=C/np.sqrt((C**2).sum(axis=1,keepdims=True))
-    B = C@C.T
+    # plt.figure()
+    # D = norm_within_category(D, category=['roi_name','sn'], value='Y_norm', norm='mean')
+    # A = pd.pivot_table(data=D,index='roi_name',columns='cond_name',values='Y_norm',aggfunc=np.mean)
+    # C=A.values
+    # C=C/np.sqrt((C**2).sum(axis=1,keepdims=True))
+    # B = C@C.T
 
-    K=3
-    W,V = plotting.calc_mds(A.values,K=K)
-    # phase, load, and recall
-    vs = np.array([[-1, 1,-1, 1,-1,1,-1,1,-1,1,-1,1],
-                  [-1,-1,-1,-1, 0,0, 0,0, 1,1, 1,1],
-                  [1,1, -1, -1, 1, 1, -1, -1,1,1, -1, -1]])
-    vs = vs/np.sqrt((vs**2).sum(axis=1,keepdims=True))
-    proj_vs = V @ vs.T
-    red =(0.8,0.2,0.2)
-    gray = (0.5,0.5,0.5)
-    lb = (0.2,0.5,1.0)
-    db = (0.0,0.1,0.6)
-    pal = [red,red,gray,gray,lb,lb,db,db]
+    # K=3
+    # W,V = plotting.calc_mds(A.values,K=K)
+    # # phase, load, and recall
+    # vs = np.array([[-1, 1,-1, 1,-1,1,-1,1,-1,1,-1,1],
+    #               [-1,-1,-1,-1, 0,0, 0,0, 1,1, 1,1],
+    #               [1,1, -1, -1, 1, 1, -1, -1,1,1, -1, -1]])
+    # vs = vs/np.sqrt((vs**2).sum(axis=1,keepdims=True))
+    # proj_vs = V @ vs.T
+    # red =(0.8,0.2,0.2)
+    # gray = (0.5,0.5,0.5)
+    # lb = (0.2,0.5,1.0)
+    # db = (0.0,0.1,0.6)
+    # pal = [red,red,gray,gray,lb,lb,db,db]
 
-    if K==2:
-        plotting.plot_mds(W[:,0],W[:,1],A.index,
-                          colors=pal,
-                          vectors=proj_vs,
-                          v_labels = ['retrieval','load+','backwards'])
-    elif K==3:
-        plotting.plot_mds3(W[:,0],W[:,1],W[:,2],A.index,
-                            colors=pal,
-                            vectors=proj_vs,
-                            v_labels = ['retrieval','load+','backwards'])
+    # if K==2:
+    #     plotting.plot_mds(W[:,0],W[:,1],A.index,
+    #                       colors=pal,
+    #                       vectors=proj_vs,
+    #                       v_labels = ['retrieval','load+','backwards'])
+    # elif K==3:
+    #     plotting.plot_mds3(W[:,0],W[:,1],W[:,2],A.index,
+    #                         colors=pal,
+    #                         vectors=proj_vs,
+    #                         v_labels = ['retrieval','load+','backwards'])
     pass

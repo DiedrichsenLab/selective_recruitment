@@ -55,9 +55,6 @@ from numpy.linalg import eigh
 
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
-# TODO: MDS plot in the condition space
-# TODO: Do cross validated reliability per effect 
-# TODO: Do cross validated correltion (as overlap measure) between the two effects
 def smooth_cifti_data(surface_sigma = 3, 
                       volume_sigma = 3,
                       atlas_space = "fs32k",
@@ -537,20 +534,22 @@ def conjunction_ana_cortex(type = "CondAll",
     data_recall_arr = np.concatenate(data_recall_subs, axis = 0)
 
     # do the test per hemisphere
-    load_sub_list = nt.surf_from_cifti(atlas.data_to_cifti(data_load_arr))
-    recall_sub_list = nt.surf_from_cifti(atlas.data_to_cifti(data_recall_arr))
+    # load_sub_list = nt.surf_from_cifti(atlas.data_to_cifti(data_load_arr))
+    # recall_sub_list = nt.surf_from_cifti(atlas.data_to_cifti(data_recall_arr))
     
-    t_val_load_list = []
-    t_val_recall_list = []
-    for h, hemi in enumerate(["L", "R"]):
+    # t_val_load_list = []
+    # t_val_recall_list = []
+    # for h, hemi in enumerate(["L", "R"]):
 
-        t_val_load, p_val_load = ttest_1samp(load_sub_list[h], axis = 0, popmean = 0, nan_policy = 'omit', alternative = 'greater')
-        t_val_load_list.append(t_val_load)
+    t_val_load, p_val_load = ttest_1samp(data_load_arr, axis = 0, popmean = 0, nan_policy = 'omit', alternative = 'greater')
+    # t_val_load_list.append(t_val_load)
+    load_list = nt.surf_from_cifti(atlas.data_to_cifti(t_val_load))
 
-        t_val_recall, p_val_recall = ttest_1samp(recall_sub_list[h], axis = 0, popmean = 0, nan_policy = 'omit', alternative='greater')
-        t_val_recall_list.append(t_val_recall)
+    t_val_recall, p_val_recall = ttest_1samp(data_recall_arr, axis = 0, popmean = 0, nan_policy = 'omit', alternative='greater')
+    # t_val_recall_list.append(t_val_recall)
 
-    return t_val_load_list, t_val_recall_list
+    # return t_val_load_list, t_val_recall_list
+    return t_val_load, t_val_recall
 
 def conjunction_ana_cerebellum(type = "CondAll", 
                            phase = 0,
@@ -694,22 +693,26 @@ def plot_contrast_cortex(subject, phase, effect, smooth = True, save_svg = False
     return ax
 
 if __name__=="__main__":
+    conjunction_ana_cortex(type = "CondAll", 
+                           phase = 0,
+                           atlas_space = "fs32k", 
+                           smooth = True)
 
-    ax = plot_overlap_enc_ret_suit(subj = "group", 
-                        smooth = False, 
-                        type = "CondAll", 
-                        save_svg = False, 
-                        ses_id = "ses-02",
-                        verbose = False, 
-                        scale = [0.05,1,0.05], 
-                        threshold = [0.05,1,0.1])
+    # ax = plot_overlap_enc_ret_suit(subj = "group", 
+    #                     smooth = False, 
+    #                     type = "CondAll", 
+    #                     save_svg = False, 
+    #                     ses_id = "ses-02",
+    #                     verbose = False, 
+    #                     scale = [0.05,1,0.05], 
+    #                     threshold = [0.05,1,0.1])
 
-    ax2 = plot_overlap_enc_ret_fs32k(subj = "group", 
-                        smooth = False, 
-                        scale = [0.05,1,0.05], 
-                        type = "CondAll", 
-                        save_svg = False, 
-                        ses_id = "ses-02",
-                        verbose = False, 
-                        threshold = [0.05,1,0.1])
+    # ax2 = plot_overlap_enc_ret_fs32k(subj = "group", 
+    #                     smooth = False, 
+    #                     scale = [0.05,1,0.05], 
+    #                     type = "CondAll", 
+    #                     save_svg = False, 
+    #                     ses_id = "ses-02",
+    #                     verbose = False, 
+    #                     threshold = [0.05,1,0.1])
     pass

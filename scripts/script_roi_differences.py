@@ -26,7 +26,6 @@ import selective_recruitment.plotting as plotting
 import selective_recruitment.recruite_ana as ra
 import selective_recruitment.globals as gl
 import selective_recruitment.scripts.script_prep_sc as ss
-import selective_recruitment.scripts.script_wm_sanity_checks as sa
 
 import Functional_Fusion.dataset as fdata
 import Functional_Fusion.atlas_map as am
@@ -119,59 +118,47 @@ def plot_roi_differences(D, cond_map, depvar = "Y_norm", var = ["cond_name", "ro
     ax.set_xticklabels(cond_map.cond_name.values, rotation=45)
     return D
 
-def cortex_ana():
-    file = cortex_dir + '/asym_Md_space-fs32k_L_K-17_smooth-1_ses-s1.pickle'
-    with open(file, 'rb') as pickle_file:
-        content = pickle.load(pickle_file)
-    # A = pickle.load(file)
-
-    print("hello")
-    return
-
-
 if __name__ == "__main__":
-    cortex_ana()
-    print("hello")
-    # df_path = os.path.join(wkdir, "ROI_NettekovenSym68c32_conn_reg.tsv")
-    # D = pd.read_csv(df_path, sep="\t")
-    # D, cond_map = prep_roi_comparison(D)
-    # D = plot_roi_differences(D,cond_map)
-    # anov = AnovaRM(data=D, depvar='Y_norm',
-    #               subject='sn',
-    #               within= ["cond_name", "roi_name"],
-    #               aggregate_func=np.mean).fit()
-    # print(anov)
+    df_path = os.path.join(wkdir, "ROI_NettekovenSym68c32_conn_reg.tsv")
+    D = pd.read_csv(df_path, sep="\t")
+    D, cond_map = prep_roi_comparison(D)
+    D = plot_roi_differences(D,cond_map)
+    anov = AnovaRM(data=D, depvar='Y_norm',
+                  subject='sn',
+                  within= ["cond_name", "roi_name"],
+                  aggregate_func=np.mean).fit()
+    print(anov)
 
 
-    # plt.figure()
-    # D = norm_within_category(D, category=['roi_name','sn'], value='Y_norm', norm='mean')
-    # A = pd.pivot_table(data=D,index='roi_name',columns='cond_name',values='Y_norm',aggfunc=np.mean)
-    # C=A.values
-    # C=C/np.sqrt((C**2).sum(axis=1,keepdims=True))
-    # B = C@C.T
+    plt.figure()
+    D = norm_within_category(D, category=['roi_name','sn'], value='Y_norm', norm='mean')
+    A = pd.pivot_table(data=D,index='roi_name',columns='cond_name',values='Y_norm',aggfunc=np.mean)
+    C=A.values
+    C=C/np.sqrt((C**2).sum(axis=1,keepdims=True))
+    B = C@C.T
 
-    # K=3
-    # W,V = plotting.calc_mds(A.values,K=K)
-    # # phase, load, and recall
-    # vs = np.array([[-1, 1,-1, 1,-1,1,-1,1,-1,1,-1,1],
-    #               [-1,-1,-1,-1, 0,0, 0,0, 1,1, 1,1],
-    #               [1,1, -1, -1, 1, 1, -1, -1,1,1, -1, -1]])
-    # vs = vs/np.sqrt((vs**2).sum(axis=1,keepdims=True))
-    # proj_vs = V @ vs.T
-    # red =(0.8,0.2,0.2)
-    # gray = (0.5,0.5,0.5)
-    # lb = (0.2,0.5,1.0)
-    # db = (0.0,0.1,0.6)
-    # pal = [red,red,gray,gray,lb,lb,db,db]
+    K=3
+    W,V = plotting.calc_mds(A.values,K=K)
+    # phase, load, and recall
+    vs = np.array([[-1, 1,-1, 1,-1,1,-1,1,-1,1,-1,1],
+                  [-1,-1,-1,-1, 0,0, 0,0, 1,1, 1,1],
+                  [1,1, -1, -1, 1, 1, -1, -1,1,1, -1, -1]])
+    vs = vs/np.sqrt((vs**2).sum(axis=1,keepdims=True))
+    proj_vs = V @ vs.T
+    red =(0.8,0.2,0.2)
+    gray = (0.5,0.5,0.5)
+    lb = (0.2,0.5,1.0)
+    db = (0.0,0.1,0.6)
+    pal = [red,red,gray,gray,lb,lb,db,db]
 
-    # if K==2:
-    #     plotting.plot_mds(W[:,0],W[:,1],A.index,
-    #                       colors=pal,
-    #                       vectors=proj_vs,
-    #                       v_labels = ['retrieval','load+','backwards'])
-    # elif K==3:
-    #     plotting.plot_mds3(W[:,0],W[:,1],W[:,2],A.index,
-    #                         colors=pal,
-    #                         vectors=proj_vs,
-    #                         v_labels = ['retrieval','load+','backwards'])
+    if K==2:
+        plotting.plot_mds(W[:,0],W[:,1],A.index,
+                          colors=pal,
+                          vectors=proj_vs,
+                          v_labels = ['retrieval','load+','backwards'])
+    elif K==3:
+        plotting.plot_mds3(W[:,0],W[:,1],W[:,2],A.index,
+                            colors=pal,
+                            vectors=proj_vs,
+                            v_labels = ['retrieval','load+','backwards'])
     pass

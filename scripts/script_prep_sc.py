@@ -13,7 +13,7 @@ import Functional_Fusion.dataset as fdata
 import Functional_Fusion.atlas_map as am
 import selective_recruitment.recruite_ana as ra
 import selective_recruitment.globals as gl
-import selective_recruitment.plotting as splotting
+import selective_recruitment.region as sroi
 
 out_dir = '/Volumes/diedrichsen_data$/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 if not Path(out_dir).exists():
@@ -66,7 +66,7 @@ def get_summary_conn(dataset = "WMFS",
     if cerebellum_roi is not None:
         cerebellum_label = gl.atlas_dir + '/tpl-SUIT' + f'/atl-{cerebellum_roi}_space-SUIT_dseg.nii'
         # use lookuptable to get region info
-        region_info = splotting.get_label_info(cerebellum_roi) 
+        region_info = sroi.get_label_info(cerebellum_roi) 
         # get observed cerebellar data
         Y_parcel, ainfo, Y_parcel_labels = ra.agg_data(tensor_cerebellum, "SUIT3", cerebellum_label, unite_struct = False)
 

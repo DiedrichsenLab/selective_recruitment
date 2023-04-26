@@ -137,10 +137,7 @@ def load_contrast(ses_id = 'ses-02',
                                     smooth = smooth, 
                                     verbose = verbose)
     data = data[0]
-
-    
     idx = (info.phase == phase)
-        
     info = info.loc[idx]
     data = data[idx, :]
     

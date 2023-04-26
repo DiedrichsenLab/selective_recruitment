@@ -88,8 +88,6 @@ def get_smooth_matrix(atlas, fwhm = 3):
             s_mat_hemi = np.exp(-1/2 * euc_dist/(fwhm**2))
             s_mat_hemi = s_mat_hemi /np.sum(s_mat_hemi, axis = 1)
             smooth_mat.append(s_mat_hemi)
-     
-
     return smooth_mat
 
 def smooth_surface(cifti_file, 
@@ -205,7 +203,7 @@ def calc_mean(data,info,
 def predict_cerebellum(weights, scale, X, atlas, info, fwhm = 0):
     """
     makes predictions for the cerebellar activation
-    uses weights from a linear model (w) and cortical data (X)
+    uses weights from a linear model (W) and cortical data (X)
     to make predictions Yhat
     Args:
     X (np.ndarray)       - cortical data
@@ -516,6 +514,25 @@ def run_regress(df,fit_intercept = False):
                 df.loc[indx,'intercept'] = coef[0] * vec
             df.loc[indx,'R2']= R2 * vec
     return df
+
+def map_regress(X,Y,fit_intercept = False,individ_slope = False):
+    """ Runs regression analysis for different subjects using a full map-wise approach  
+    Args:
+        X (ndarray): Predicted cerebellar data (n_subjects x n_cond x n_voxels) 
+        Y (ndarray): Observed cerebellar data (n_subjects x n_cond x n_voxels)
+        fit_intercept (bool): Use intercept in regression. Default = False
+        individ_slope (bool): Use individual slopes. Default = False
+    Returns:
+        df (DataFrame): resulting data frame
+    """
+    n_subjs = X.shape[2]
+    res = np.zeros(X.shape)
+    coef = np.zeros()
+    for s in range(n_subjs):
+        coef, res, R2 = regressXY(X[s,:,:],Y[s,:,:], 
+                fit_intercept = fit_intercept)
+
+
 
 def threshold_map(map_data, threshold, binarize = False):
     """applies threshold (in percent) to the data

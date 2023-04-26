@@ -47,7 +47,7 @@ def prep_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
 
     return g_df
 
-def annotate(dataframe, labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
+def annotate(dataframe, x = "X", y = "Y", labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
     """
     annotate data points in the scatterplot
     Args:
@@ -63,8 +63,8 @@ def annotate(dataframe, labels = 'cond_num', text_size = 'small', text_weight = 
         labels = dataframe[labels]
     for i,d in dataframe.iterrows():
         text = plt.text(
-                        d.X+0.001,
-                        d.Y,
+                        d[x]+0.001,
+                        d[y],
                         s = labels.loc[i],
                         horizontalalignment='left',
                         size=text_size,
@@ -74,57 +74,7 @@ def annotate(dataframe, labels = 'cond_num', text_size = 'small', text_weight = 
 
     adjust_text(texts) # make sure you have installed adjust_text
 
-def get_label_info(parcellation):
-    # get the lookuptable for the parcellation
-    lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}.lut')
-
-    # get the label info
-    label_info = lookuptable[2]
-    if '0' not in label_info:
-        # append a 0 to it
-        label_info.insert(0, '0')
-    cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
-    return label_info
-
-def plot_parcellation(parcellation, roi_name):
-    """
-    plot the selected region from parcellation on flatmap
-    Args:
-        parcellation (str) - name of the parcellation
-        roi_name (str) - name of the roi as stored in the lookup table
-    Return:
-        ax (axes object)
-        roi_num (int) - number corresponding to the region
-    """
-    fname = gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}_space-SUIT_dseg.nii'
-    img = nb.load(fname)
-    # map it from volume to surface
-    img_flat = flatmap.vol_to_surf([img], stats='mode', space = 'SUIT')
-
-    # get the lookuptable for the parcellation
-    lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}.lut')
-
-    # get the label info
-    label_info = lookuptable[2]
-    if '0' not in label_info:
-        # append a 0 to it
-        label_info.insert(0, '0')
-    cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
-
-    # get the index for the region
-    roi_num = label_info.index(roi_name)
-    roi_flat = img_flat.copy()
-    # convert non-selected labels to nan
-    roi_flat[roi_flat != float(roi_num)] = np.nan
-    # plot the roi
-    ax = flatmap.plot(roi_flat, render="plotly",
-                      hover='auto', colorbar = False,
-                      bordersize = 1.5, overlay_type='label',
-                      label_names=label_info, cmap = cmap)
-
-    return ax, roi_num
-
-def make_scatterplot_depricated(dataframe, hue = "phase", style = "recall", label = "load", height = 4, aspect = 1):
+def make_scatterplot_depricated(dataframe, x = "X", y = "Y", hue = "phase", style = "recall", label = "load", height = 4, aspect = 1):
     """
     make scatterplot
     uses FacetGrid
@@ -165,7 +115,7 @@ def make_scatterplot_depricated(dataframe, hue = "phase", style = "recall", labe
     annotate(dataframe, text_size = 'small', text_weight = 'regular', labels = label)
     return
 
-def make_scatterplot(dataframe, split='cond_num', fit_line = True, labels=None,
+def make_scatterplot(dataframe, x = "X", y = "Y", split='cond_num', fit_line = True, labels=None,
         colors=None,markers=None):
     """
     make scatterplot
@@ -181,7 +131,7 @@ def make_scatterplot(dataframe, split='cond_num', fit_line = True, labels=None,
     # do the scatter plot
     grouped = dataframe.groupby([split])
     agg_kw = {split:'first',
-              'X':np.mean,'Y': np.mean,
+              x:np.mean,y: np.mean,
              'slope':np.mean,
              'intercept':np.mean}
     df = grouped.agg(agg_kw)
@@ -191,8 +141,8 @@ def make_scatterplot(dataframe, split='cond_num', fit_line = True, labels=None,
     df['X_err'] = grouped.res.apply(sps.sem)*1.96
 
     # add  the appropriate errorbars
-    plt.errorbar(x = df['X'],
-                 y = df['Y'],
+    plt.errorbar(x = df[x],
+                 y = df[y],
                  yerr = df['X_err'],
                  elinewidth=2,
                 fmt='none', # no marker will be used when plotting the error bars
@@ -202,7 +152,7 @@ def make_scatterplot(dataframe, split='cond_num', fit_line = True, labels=None,
 
     # Plot average regression line
     if fit_line:
-        xrange = np.array([df['X'].min(),df['X'].max()])
+        xrange = np.array([df[x].min(),df[x].max()])
         ypred = xrange*df.slope.mean()+df.intercept.mean()
         plt.plot(xrange,ypred,'k-')
 
@@ -214,7 +164,7 @@ def make_scatterplot(dataframe, split='cond_num', fit_line = True, labels=None,
     ax.set_ylabel('Cerebellar Activation (a.u.)')
 
     # get labels for each data point
-    annotate(df,
+    annotate(df, x = x, y = y,
             text_size = 'small',
             text_weight = 'regular',
             labels = df[split].map(labels))
@@ -305,53 +255,6 @@ def plot_cortex_activation(dataset, ses_id, subject, contrast_name):
                                         ))
     return fig_hemi
 
-def plot_connectivity_weight(roi_name = "D2R",
-                             method = "L2Regression",
-                             cortex_roi = "Icosahedron1002",
-                             cerebellum_roi = "NettekovenSym68c32",
-                             cerebellum_atlas = "SUIT3",
-                             log_alpha = 8,
-                             dataset_name = "MDTB",
-                             cmap = "coolwarm",
-                             ses_id = "ses-s1"):
-    """
-    """
-    # get connectivity weight maps for the selected region
-    cifti_img = wplot.get_weight_map(method = method,
-                                    cortex_roi = cortex_roi,
-                                    cerebellum_roi = cerebellum_roi,
-                                    cerebellum_atlas = cerebellum_atlas,
-                                    log_alpha = log_alpha,
-                                    dataset_name = dataset_name,
-                                    ses_id = ses_id,
-                                    type = "dscalar"
-                                    )
-
-    # get the cortical weight map corresponding to the current
-    ## get parcel axis from the cifti image
-    parcel_axis = cifti_img.header.get_axis(0)
-    ## get the name of the parcels in the parcel_axis
-    idx = list(parcel_axis.name).index(roi_name)
-    # get the maps for left and right hemi
-    weight_map_list = nt.surf_from_cifti(cifti_img)
-    # get the map for the selected region for left and right hemispheres
-    weight_roi_list = [weight_map_list[h][idx, :] for h in [0, 1]]
-
-    surf_hemi = []
-    fig_hemi = []
-    for h, hemi in enumerate(['L', 'R']):
-        img = weight_map_list[h]
-        # get the numpy array corresponding to the contrast
-        img_data = weight_roi_list[h]
-        surf_hemi.append(gl.atlas_dir + f"/tpl-fs32k/tpl_fs32k_hemi-{hemi}_inflated.surf.gii")
-
-        fig_hemi.append(plotting.view_surf(
-                                        surf_hemi[h], img_data, colorbar=True,
-                                        cmap=cmap, vmax = np.nanmax(img_data),
-                                        vmin = np.nanmin(img_data)
-                                        ))
-    return fig_hemi
-
 def roi_difference(df,
              xvar = "cond_name",
              hue = "roi_name",
@@ -413,6 +316,7 @@ def calc_mds(X,center=True,K=2):
     V = V[:K,:] # V is already transposed
     return W*S,V
 
+
 def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
     ax = plt.gca()
     # Scatter plot with axis equal
@@ -441,9 +345,7 @@ def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regula
     return
 
 def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
-    # ax = plt.gca(projection='3d')
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
+    ax = plt.gca(projection='3d')
     ax.scatter(x,y, z,s=70,c=colors)
     ax.set_box_aspect((1, 1, 1))
     texts = []
@@ -464,7 +366,7 @@ def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 're
         scl=(ax.get_xlim()[1]-ax.get_xlim()[0])/4
         v = vectors*scl
         for i in range(vectors.shape[1]):
-            ax.quiver(0,0,0,v[0,i],v[1,i],v[2,i],normalize=False, color = "black")
+            ax.quiver(0,0,0,v[0,i],v[1,i],v[2,i],normalize=False)
             if v_labels is not None:
                 ax.text(v[0,i]*1.05,v[1,i]*1.05,v[2,i]*1.05,v_labels[i],horizontalalignment='center',verticalalignment='center')
     return

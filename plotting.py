@@ -1,23 +1,32 @@
 import os
 import numpy as np
+import pandas as pd
+from pathlib import Path
+
 import seaborn as sns # for plots
+import plotly.express as px
+import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+from adjustText import adjust_text # to adjust the text labels in the plots (pip install adjustText)
+
 import nibabel as nb
 import nitools as nt
 from nilearn import plotting
+from SUITPy import flatmap
+
+from scipy import stats as sps # to calcualte confidence intervals, etc
+from statsmodels.stats.anova import AnovaRM # perform F test
+
 import selective_recruitment.globals as gl
+import selective_recruitment.region as sroi
+
 import Functional_Fusion.dataset as fdata
 import Functional_Fusion.atlas_map as am
-from matplotlib.colors import LinearSegmentedColormap
-import pandas as pd
-from pathlib import Path
-from SUITPy import flatmap
-import matplotlib.pyplot as plt
-from scipy import stats as sps # to calcualte confidence intervals, etc
-from adjustText import adjust_text # to adjust the text labels in the plots (pip install adjustText)
 
 import cortico_cereb_connectivity.scripts.script_plot_weights as wplot
 
-from statsmodels.stats.anova import AnovaRM # perform F test
+
 
 def prep_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
     """
@@ -345,7 +354,9 @@ def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regula
     return
 
 def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
-    ax = plt.gca(projection='3d')
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    # ax = plt.gca(projection='3d')
     ax.scatter(x,y, z,s=70,c=colors)
     ax.set_box_aspect((1, 1, 1))
     texts = []
@@ -363,6 +374,9 @@ def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 're
         texts.append(text)
     adjust_text(texts) # make sure you have installed adjust_text
     if vectors is not None:
+        print(ax.get_xlim())
+        print(min(x))
+        print(max(x))
         scl=(ax.get_xlim()[1]-ax.get_xlim()[0])/4
         v = vectors*scl
         for i in range(vectors.shape[1]):
@@ -372,8 +386,54 @@ def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 're
     return
 
 
+def plot_mds3_new(x, y,z, 
+                  vectors = None,
+                  label = "NettekovenSym68c32", 
+                  roi_super = "D", 
+                  hue = "roi_super", 
+                  text = "roi_name", 
+                  vec_labels = ['retrieval+','load+','backwards+']):
+    # get region info
+    Dinfo,D_indx, colors_D = sroi.get_region_info(label = label, roi_super = roi_super)
+    # adding the components to the D region info dataframe
+    Dinfo["comp_0"] = x
+    Dinfo["comp_1"] = y
+    Dinfo["comp_2"] = z
+    # add index
+    Dinfo["idx"] = Dinfo["roi_name"].str[1].astype(int)
+    Dinfo["roi_super"] = Dinfo["roi_name"].str[0]
 
-def annotate2(dataframe, xlabel, ylabel, labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
+    fig = px.scatter_3d(Dinfo, x="comp_0", y="comp_1", z="comp_2", text = text, color = hue)
+    # tight layout
+    fig.update_layout(margin=dict(l=0, r=0, b=0, t=0))
+
+    if vectors is not None:
+        
+        x_min = min(x)
+        x_max = max(x)
+
+        # scale the vectors
+        scl=(x_max-x_min)/4
+        vec = vectors*scl
+
+        # make vectors
+        m, n = vec.shape        
+        lines = np.zeros((m,2*n),dtype=vec.dtype)
+        lines[:,::-2] = vec
+        trace1 = go.Scatter3d(
+            x=lines[0, :],
+            y=lines[1, :],
+            z=lines[2, :],
+            mode='lines+text',
+            text=vec_labels,
+            textposition=['top right', 'bottom right', 'bottom right'],
+            name='contrasts'
+        )
+        fig.add_trace(trace1)
+    fig.show()
+    return 
+
+def annotate_depricated(dataframe, xlabel, ylabel, labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
     """
     annotate data points in the scatterplot
     Args:
@@ -400,7 +460,7 @@ def annotate2(dataframe, xlabel, ylabel, labels = 'cond_num', text_size = 'small
     adjust_text(texts) # make sure you have installed adjust_text
 
 
-def make_scatterplot2(dataframe, xlabel, ylabel, xerr, yerr,  split='cond_num', labels=None,
+def make_scatterplot_depricated2(dataframe, xlabel, ylabel, xerr, yerr,  split='cond_num', labels=None,
         colors=None,markers=None):
     """
     make scatterplot

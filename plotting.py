@@ -374,9 +374,6 @@ def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 're
         texts.append(text)
     adjust_text(texts) # make sure you have installed adjust_text
     if vectors is not None:
-        print(ax.get_xlim())
-        print(min(x))
-        print(max(x))
         scl=(ax.get_xlim()[1]-ax.get_xlim()[0])/4
         v = vectors*scl
         for i in range(vectors.shape[1]):
@@ -400,7 +397,7 @@ def plot_mds3_new(x, y,z,
     Dinfo["comp_1"] = y
     Dinfo["comp_2"] = z
     # add index
-    Dinfo["idx"] = Dinfo["roi_name"].str[1].astype(int)
+    Dinfo["roi_idx"] = Dinfo["roi_name"].str[1].astype(int)
     Dinfo["roi_super"] = Dinfo["roi_name"].str[0]
 
     fig = px.scatter_3d(Dinfo, x="comp_0", y="comp_1", z="comp_2", text = text, color = hue)
@@ -426,8 +423,9 @@ def plot_mds3_new(x, y,z,
             z=lines[2, :],
             mode='lines+text',
             text=vec_labels,
-            textposition=['top right', 'bottom right', 'bottom right'],
-            name='contrasts'
+            textposition=['top center', 'middle center', 'bottom center'],
+            name='contrasts', 
+            
         )
         fig.add_trace(trace1)
     fig.show()

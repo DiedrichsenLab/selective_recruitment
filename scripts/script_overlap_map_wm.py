@@ -55,8 +55,7 @@ from numpy.linalg import eigh
 
 wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
-def smooth_cifti_data(surface_sigma = 3, 
-                      volume_sigma = 3,
+def smooth_cifti_data(sigma = 3, 
                       atlas_space = "fs32k",
                       type = "CondAll", 
                       ses_id = "ses-02"):
@@ -65,85 +64,183 @@ def smooth_cifti_data(surface_sigma = 3,
     # get list of subjects
     T = Data.get_participants()
     subject_list = list(T.participant_id.values)
-    subject_list.append("group")
+    # subject_list.append("group")
 
     # get the surfaces for smoothing
     surfs = [Data.atlas_dir + f'/tpl-fs32k/tpl_fs32k_hemi-{h}_inflated.surf.gii' for i, h in enumerate(['L', 'R'])]
     # loop over subjects, load data, smooth and save with s prefix
     for s, subject in enumerate(subject_list):
+        print(f"- smoothing {subject}")
         # load the cifti
         cifti_fpath = Data.data_dir.format(subject)
         cifti_fname = f"{subject}_space-{atlas_space}_{ses_id}_{type}.dscalar.nii"
         cifti_input = f"{cifti_fpath}/{cifti_fname}"
-        cifti_output = f"{cifti_fpath}/s{cifti_fname}"
+
+        # make up the smoothed file name
+        fparts = cifti_fname.split(".")
+        cifti_output = f"{cifti_fpath}/{fparts[0]}_desc-sm{int(sigma)}.{fparts[1]}.{fparts[2]}"
 
         # smooth the file
         ntcifti.smooth_cifti(cifti_input, 
                               cifti_output,
                               surfs[0], 
                               surfs[1], 
-                              surface_sigma = surface_sigma, 
-                              volume_sigma = volume_sigma, 
+                              surface_sigma = sigma, 
+                              volume_sigma = sigma, 
                               direction = "COLUMN", 
                               )
     return
 
-def calc_contrast(data, info):
-    """calculates the contrasts for load and recall effect
-    Args:
-        data (np.ndarray): 
-        info (pd.DataFrame): _pandas dataframe representing conditions_ 
-        load_effect (int, optional): _value of the load to be used as effect_. Defaults to 6.
-        load_baseline (int, optional): _value of the load to be used as baseline_. Defaults to 2.
-        recall_effect (int, optional): _value of the recall to be used as effect_. Defaults to 0.
-        recall_baseline (int, optional): _value of the recall to be used as baseline_. Defaults to 1.
-        
-    Returns:
-        data_load
-        data_recall
+def calc_contrast(X, contrast_vector):
     """
-    # load effect will be calculated on the forwards conditions only
-    ## get the index for baseline condition
-    idx_base_load = (info.load == 2) & (info.recall == 1)
-    ## get the index for effect condition
-    idx_effect_load = (info.load == 6) & (info.recall == 1)
-    ## load effect
-    data_load = np.nanmean(data[idx_effect_load, :], axis = 0) - np.nanmean(data[idx_base_load, :], axis = 0)
-    
-    # calculate the effect of recall direction
-    ## get the index for baseline condition
-    idx_base_recall = (info.recall == 1) 
-    ## get the index for effect condition
-    idx_effect_recall = (info.recall == 0)
-    ## recall effect
-    data_recall = np.nanmean(data[idx_effect_recall, :], axis = 0) - np.nanmean(data[idx_base_recall, :], axis = 0)
-    return data_load, data_recall
+    Calculates contrast of interest 
+    """
+    return contrast_vector.T@X
 
-def load_contrast(ses_id = 'ses-02',
-                subj = "group",atlas_space='SUIT3',
-                phase=0, 
-                type = "CondAll",
-                smooth = True, 
-                verbose = False):
+def get_enc_ret_contrast(subj = "group", 
+                        smooth = 3, 
+                        atlas_space = "SUIT3",
+                        type = "CondAll", 
+                        ses_id = "ses-02"):
     """
-    1. Gets group data 
-    2. Calculates the desired contrast (uses the info file to get conditions)
-    """    
+    Args:
+        subj (str or None) - input None for all the subjects
+        smooth (bool) - True if you want to ues smoothed data
+        type (str) - type of the extracted data to be used
+    """
+    # get dataset
     data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
                                     atlas=atlas_space,
                                     sess=ses_id,
                                     subj=subj,
                                     type = type,  
-                                    smooth = smooth, 
-                                    verbose = verbose)
-    data = data[0]
-    idx = (info.phase == phase)
-    info = info.loc[idx]
-    data = data[idx, :]
+                                    smooth = smooth)
     
-    # get contrasts
-    data_load, data_recall = calc_contrast(data, info)
-    return data_load,data_recall
+    # make contrast vector for encoding and retrieval
+    # get indices for all the enc contrasts
+    idx_enc = info.phase == 0
+    c_enc = (idx_enc.values*1)/np.sum(idx_enc.values*1)
+    enc_data = calc_contrast(data[0, :, :], c_enc)
+    # get indices for all retrieval contrasts
+    idx_ret = info.phase == 1
+    c_ret = (idx_ret.values*1)/np.sum(idx_ret.values*1)
+    ret_data = calc_contrast(data[0, :, :], c_ret)
+
+    # prepare for rgb map
+    dat_rgb =np.c_[enc_data,
+               np.zeros(enc_data.shape),
+               ret_data].T # Leave the green gun empty 
+
+    return dat_rgb
+
+def get_load_dir_contrast(subj = "group", 
+                        smooth = False,
+                        atlas_space = "SUIT3", 
+                        type = "CondAll", 
+                        phase = 0, 
+                        ses_id = "ses-02"):
+    """
+    """
+    # get dataset
+    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas=atlas_space,
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type,  
+                                    smooth = smooth)
+    
+    # make contrast vector for load effect
+    idx_load6 = (info.phase == phase) & (info.recall == 1) & (info.load == 6)
+    idx_load2 = (info.phase == phase) & (info.recall == 1) & (info.load == 2)
+    c_load = ((idx_load6.values*1)/np.sum(idx_load6.values*1)) - ((idx_load2.values*1)/np.sum(idx_load2.values*1))
+    
+    # make contrast vector for dir effect
+    idx_bw = (info.phase == phase) & (info.recall == 0) 
+    idx_fw = (info.phase == phase) & (info.recall == 1) 
+    c_dir = ((idx_bw.values*1)/np.sum(idx_bw.values*1)) - ((idx_fw.values*1)/np.sum(idx_fw.values*1))
+    
+    dir_data = calc_contrast(data[0, :, :], c_dir)
+    load_data = calc_contrast(data[0, :, :], c_load)
+
+    # prepare for rgb map
+    dat_rgb =np.c_[dir_data,
+               np.zeros(dir_data.shape),
+               load_data].T # Leave the green gun empty 
+    return dat_rgb
+
+def get_enc_ret_dir_contrast(subj = "group", 
+                            smooth = 3, 
+                            atlas_space = "SUIT3",
+                            type = "CondAll",
+                            dir = 0,  
+                            ses_id = "ses-02"):
+    """
+    Args:
+        subj (str or None) - input None for all the subjects
+        smooth (bool) - True if you want to ues smoothed data
+        type (str) - type of the extracted data to be used
+    """
+    # get dataset
+    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas=atlas_space,
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type,  
+                                    smooth = smooth)
+    
+    # make contrast vector for encoding and retrieval
+    # get indices for all the enc contrasts
+    idx_enc = (info.phase == 0) & (info.recall == dir)
+    c_enc = (idx_enc.values*1)/np.sum(idx_enc.values*1)
+    enc_data = calc_contrast(data[0, :, :], c_enc)
+    # get indices for all retrieval contrasts
+    idx_ret = info.phase == 1 & (info.recall == dir)
+    c_ret = (idx_ret.values*1)/np.sum(idx_ret.values*1)
+    ret_data = calc_contrast(data[0, :, :], c_ret)
+
+    # prepare for rgb map
+    dat_rgb =np.c_[enc_data,
+               np.zeros(enc_data.shape),
+               ret_data].T # Leave the green gun empty 
+    return
+
+def plot_rgb_map(data_rgb, 
+                 atlas_space = "SUIT3", 
+                 scale = [0.02, 1, 0.02], 
+                 threshold = [0.02, 1, 0.02]):
+    """
+    plots rgb map of overlap on flatmap
+    Args:
+        data_rgb (np.ndarray) - 3*p array containinig rgb values per voxel/vertex
+        atlas_space (str) - the atlas you are in, either SUIT3 or fs32k
+        scale (list) - how much do you want to scale
+        threshold (list) - threshold to be applied to the values
+    Returns:
+        ax (plt axes object) 
+    """
+    if atlas_space == "SUIT3":
+        atlas, a_info = am.get_atlas(atlas_space,gl.atlas_dir)
+        Nii = atlas.data_to_nifti(data_rgb)
+        data = suit.vol_to_surf(Nii,space='SUIT')
+        rgb = suit.flatmap.map_to_rgb(data,scale=scale,threshold=threshold)
+        ax = suit.flatmap.plot(rgb,overlay_type='rgb', colorbar = True)
+    elif atlas_space == "fs32k":
+        # get the data into surface
+        atlas, a_info = am.get_atlas('fs32k',gl.atlas_dir)
+        
+        dat_cifti = atlas.data_to_cifti(data_rgb)
+
+        # get the lists of data for each hemi
+        dat_list = nt.surf_from_cifti(dat_cifti)
+
+        ax = []
+        for i,hemi in enumerate(['L', 'R']):
+            plt.figure()
+            rgb = suit.flatmap.map_to_rgb(dat_list[i].T,scale,threshold=threshold)
+            ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
+
+    return ax
+
 
 def calc_overlap_corr(atlas_space = "fs32k", 
                       type = "CondAll",
@@ -334,164 +431,6 @@ def get_effect_reliability_summary(smooth = True, verbose = False, subtract_mean
     D = pd.concat([D_fs, D_suit], axis = 0)
     return D
 
-def plot_overlap_enc_ret_suit(subj = "group", 
-                        smooth = False, 
-                        scale = None, 
-                        type = "CondAll", 
-                        save_svg = False, 
-                        ses_id = "ses-02",
-                        verbose = False, 
-                        threshold = None):
-    """
-    """
-
-    # get dataset
-    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                    atlas="SUIT3",
-                                    sess=ses_id,
-                                    subj=subj,
-                                    type = type,  
-                                    smooth = smooth, 
-                                    verbose = verbose)
-    # calculate enc and retrieval contrasts
-    # get indices for all the enc contrasts
-    idx_enc = info.phase == 0
-
-    # get indices for all retrieval contrasts
-    idx_ret = info.phase == 1
-
-    enc_contrast = np.nanmean(data[0, idx_enc, :], axis = 0)
-    ret_contrast = np.nanmean(data[0, idx_ret, :], axis = 0)
-
-
-    # do the rgba map
-
-    data=np.c_[enc_contrast,
-               np.zeros(enc_contrast.shape),
-               ret_contrast].T # Leave the green gun empty 
-    atlas, a_info = am.get_atlas('SUIT3',gl.atlas_dir)
-    Nii = atlas.data_to_nifti(data)
-    data = suit.vol_to_surf(Nii,space='SUIT')
-    rgb = suit.flatmap.map_to_rgb(data,scale=scale,threshold=threshold)
-    ax = suit.flatmap.plot(rgb,overlay_type='rgb', colorbar = True)
-    return ax
-
-def plot_overlap_enc_ret_fs32k(subj = "group", 
-                        smooth = False, 
-                        scale = None, 
-                        type = "CondAll", 
-                        save_svg = False, 
-                        ses_id = "ses-02",
-                        verbose = False, 
-                        threshold = None):
-    """
-    """
-
-    # get dataset
-    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                    atlas="fs32k",
-                                    sess=ses_id,
-                                    subj=subj,
-                                    type = type,  
-                                    smooth = smooth, 
-                                    verbose = verbose)
-    # calculate enc and retrieval contrasts
-    # get indices for all the enc contrasts
-    idx_enc = info.phase == 0
-
-    # get indices for all retrieval contrasts
-    idx_ret = info.phase == 1
-
-    enc_contrast = np.nanmean(data[0, idx_enc, :], axis = 0)
-    ret_contrast = np.nanmean(data[0, idx_ret, :], axis = 0)
-
-    # get the data into surface
-    atlas, a_info = am.get_atlas('fs32k',gl.atlas_dir)
-    enc_cifti = atlas.data_to_cifti(enc_contrast.reshape(-1, 1).T)
-    ret_cifti = atlas.data_to_cifti(ret_contrast.reshape(-1, 1).T)
-
-    # get the lists of data for each hemi
-    enc_list = nt.surf_from_cifti(enc_cifti)
-    ret_list = nt.surf_from_cifti(ret_cifti)
-
-    ax = []
-    for i,hemi in enumerate(['L', 'R']):
-        plt.figure()
-        data=np.c_[enc_list[i].T,
-                np.zeros(ret_list[i].T.shape),
-                ret_list[i].T] # Leave the green gun empty 
-
-        # plt.subplot(1,2,i+1)
-        rgb = suit.flatmap.map_to_rgb(data,scale,threshold=threshold)
-        ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
-    return ax
-
-def plot_overlap_cerebellum(subject = "group", 
-                            phase = 0,
-                            smooth = False, 
-                            scale = None, 
-                            type = 'CondAll',
-                            save_svg = False, 
-                            verbose = False, 
-                            threshold = None):
-    """
-    Makes an overlap plot for the cerebellum 
-    """
-    load_eff,dir_eff=load_contrast(ses_id = 'ses-02',
-                                   subj = subject,
-                                   atlas_space='SUIT3',
-                                   phase=phase, 
-                                   verbose = verbose, 
-                                   smooth = False   , 
-                                   type = type)
-    data=np.c_[dir_eff,
-               np.zeros(load_eff.shape),
-               load_eff].T # Leave the green gun empty 
-    atlas, a_info = am.get_atlas('SUIT3',gl.atlas_dir)
-    Nii = atlas.data_to_nifti(data)
-    data = suit.vol_to_surf(Nii,space='SUIT')
-    rgb = suit.flatmap.map_to_rgb(data,scale=scale,threshold=threshold)
-    ax = suit.flatmap.plot(rgb,overlay_type='rgb', colorbar = True)
-    return ax
-
-def plot_overlap_cortex(subject = "group", 
-                        phase=0, 
-                        smooth = True, 
-                        scale = None,
-                        type = "CondAll",
-                        verbose = False, 
-                        threshold = None):
-    """
-    Makes an overlap plot for the cerebellum 
-    """
-    load_eff,dir_eff= load_contrast(ses_id = 'ses-02',
-                                    subj = subject,
-                                    atlas_space='fs32k',
-                                    phase=phase, 
-                                    type = type, 
-                                    verbose = verbose,
-                                    smooth = smooth)
-    # get the data into surface
-    atlas, a_info = am.get_atlas('fs32k',gl.atlas_dir)
-    load_cifti = atlas.data_to_cifti(load_eff.reshape(-1, 1).T)
-    dir_cifti = atlas.data_to_cifti(dir_eff.reshape(-1, 1).T)
-
-    # get the lists of data for each hemi
-    load_list = nt.surf_from_cifti(load_cifti)
-    dir_list = nt.surf_from_cifti(dir_cifti)
-
-    ax = []
-    for i,hemi in enumerate(['L', 'R']):
-        plt.figure()
-        data=np.c_[dir_list[i].T,
-                np.zeros(load_list[i].T.shape),
-                load_list[i].T] # Leave the green gun empty 
-
-        # plt.subplot(1,2,i+1)
-        rgb = suit.flatmap.map_to_rgb(data,scale,threshold=threshold)
-        ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
-    return ax
-
 def conjunction_ana_cortex(type = "CondAll", 
                            phase = 0,
                            atlas_space = "fs32k", 
@@ -641,75 +580,7 @@ def plot_contrast_cerebellum(subject, phase = "Enc", effect = "load", save_svg =
         ax.write_image(f"{wkdir}/figures/flatmap_{phase}_{effect}_{subject}.svg")
     return 
 
-def plot_contrast_cortex(subject, phase, effect, smooth = True, save_svg = False):
-    """
-    """    
-
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-    
-    # surfaces for plotting
-    surfs = [Data.atlas_dir + f'/tpl-fs32k/tpl_fs32k_hemi-{h}_inflated.surf.gii' for i, h in enumerate(['L', 'R'])]
-    # get the cerebellar atlas object
-    atlas, ainfo = am.get_atlas('SUIT3', Data.atlas_dir)
-    # which contrast?
-    effect_name = f"{phase}_{effect}"
-    # load the cifti
-    if smooth:
-        cifti = nb.load(f"{wkdir}/data/{subject}/sload_recall_space_fs32k_CondAll_{subject}.dscalar.nii")
-    else: 
-        cifti = nb.load(f"{wkdir}/data/{subject}/load_recall_space_fs32k_CondAll_{subject}.dscalar.nii")
-    # get the names of the contrasts
-    con_names = list(cifti.header.get_axis(0).name)
-
-    # print(cifti.get_fdata().shape)
-
-    # get the index of the contrast in question
-    idx = con_names.index(effect_name)
-    dat_list = nt.surf_from_cifti(cifti)
-
-    # get the numpy array corresponding to the contrast
-    img_con_list = [dat_list[i][idx, :].reshape(-1, 1) for i, h in enumerate(['L', 'R'])]
-
-    
-
-    fig = plotting.plot_surf_stat_map(
-                                        surfs[0], img_con_list[0], hemi='left',
-                                        # title='Surface left hemisphere',
-                                        colorbar=True, 
-                                        view = 'lateral',
-                                        cmap="coolwarm",
-                                        engine='plotly',
-                                        title = f'{phase}_{effect}_{subject}',
-                                        symmetric_cbar = True,
-                                        vmax = 0.1
-                                    )
-
-    ax = fig.figure
-    if save_svg:
-        ax.write_image(f"{wkdir}/figures/cortex_left_{phase}_{effect}_{subject}.svg")
-    return ax
 
 if __name__=="__main__":
-    conjunction_ana_cortex(type = "CondAll", 
-                           phase = 0,
-                           atlas_space = "fs32k", 
-                           smooth = True)
-
-    # ax = plot_overlap_enc_ret_suit(subj = "group", 
-    #                     smooth = False, 
-    #                     type = "CondAll", 
-    #                     save_svg = False, 
-    #                     ses_id = "ses-02",
-    #                     verbose = False, 
-    #                     scale = [0.05,1,0.05], 
-    #                     threshold = [0.05,1,0.1])
-
-    # ax2 = plot_overlap_enc_ret_fs32k(subj = "group", 
-    #                     smooth = False, 
-    #                     scale = [0.05,1,0.05], 
-    #                     type = "CondAll", 
-    #                     save_svg = False, 
-    #                     ses_id = "ses-02",
-    #                     verbose = False, 
-    #                     threshold = [0.05,1,0.1])
+    
     pass

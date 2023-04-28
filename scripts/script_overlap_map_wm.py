@@ -91,11 +91,31 @@ def smooth_cifti_data(sigma = 3,
                               )
     return
 
-def calc_contrast(X, contrast_vector):
+def get_contrast(subj = None, 
+                 contrast_vector = None, 
+                 smooth = 3, 
+                 atlas_space = "SUIT3",
+                 type = "CondAll", 
+                 ses_id = "ses-02"):
     """
-    Calculates contrast of interest 
     """
-    return contrast_vector.T@X
+
+    # get dataset
+    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas=atlas_space,
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type,  
+                                    smooth = smooth)
+
+    # get contrast per subject
+    n_subj, _, n_vox = data.shape
+    con_data = np.zeros([n_subj, 1, n_vox])
+    for s in range(n_subj):
+        A = contrast_vector.reshape(-1, 1).T@data[s, :, :]
+        con_data[s, :, : ] = contrast_vector.reshape(-1, 1).T@data[s, :, :]
+
+    return con_data
 
 def get_enc_ret_contrast(subj = "group", 
                         smooth = 3, 
@@ -108,30 +128,34 @@ def get_enc_ret_contrast(subj = "group",
         smooth (bool) - True if you want to ues smoothed data
         type (str) - type of the extracted data to be used
     """
-    # get dataset
-    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                    atlas=atlas_space,
-                                    sess=ses_id,
-                                    subj=subj,
-                                    type = type,  
-                                    smooth = smooth)
+    # get dataset class
+    Data = ds.get_dataset_class(gl.base_dir, 'WMFS')
+    # get info
+    info = Data.get_info(ses_id=ses_id,type=type, subj=subj)
     
     # make contrast vector for encoding and retrieval
     # get indices for all the enc contrasts
     idx_enc = info.phase == 0
     c_enc = (idx_enc.values*1)/np.sum(idx_enc.values*1)
-    enc_data = calc_contrast(data[0, :, :], c_enc)
+    # get contrast
+    enc_data = get_contrast(subj = subj, 
+                            contrast_vector = c_enc, 
+                            smooth = smooth, 
+                            atlas_space = atlas_space,
+                            type = type, 
+                            ses_id = ses_id)
     # get indices for all retrieval contrasts
     idx_ret = info.phase == 1
     c_ret = (idx_ret.values*1)/np.sum(idx_ret.values*1)
-    ret_data = calc_contrast(data[0, :, :], c_ret)
+    # get contrast
+    ret_data = get_contrast(subj = subj, 
+                            contrast_vector = c_ret, 
+                            smooth = smooth, 
+                            atlas_space = atlas_space,
+                            type = type, 
+                            ses_id = ses_id)
 
-    # prepare for rgb map
-    dat_rgb =np.c_[enc_data,
-               np.zeros(enc_data.shape),
-               ret_data].T # Leave the green gun empty 
-
-    return dat_rgb
+    return enc_data, ret_data
 
 def get_load_dir_contrast(subj = "group", 
                         smooth = False,
@@ -141,32 +165,35 @@ def get_load_dir_contrast(subj = "group",
                         ses_id = "ses-02"):
     """
     """
-    # get dataset
-    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                    atlas=atlas_space,
-                                    sess=ses_id,
-                                    subj=subj,
-                                    type = type,  
-                                    smooth = smooth)
+    # get dataset class
+    Data = ds.get_dataset_class(gl.base_dir, 'WMFS')
+    # get info
+    info = Data.get_info(ses_id=ses_id,type=type, subj=subj)
     
     # make contrast vector for load effect
     idx_load6 = (info.phase == phase) & (info.recall == 1) & (info.load == 6)
     idx_load2 = (info.phase == phase) & (info.recall == 1) & (info.load == 2)
     c_load = ((idx_load6.values*1)/np.sum(idx_load6.values*1)) - ((idx_load2.values*1)/np.sum(idx_load2.values*1))
-    
+    # get contrast
+    load_data = get_contrast(subj = subj, 
+                                contrast_vector = c_load, 
+                                smooth = smooth, 
+                                atlas_space = atlas_space,
+                                type = type, 
+                                ses_id = ses_id)
+
     # make contrast vector for dir effect
     idx_bw = (info.phase == phase) & (info.recall == 0) 
     idx_fw = (info.phase == phase) & (info.recall == 1) 
     c_dir = ((idx_bw.values*1)/np.sum(idx_bw.values*1)) - ((idx_fw.values*1)/np.sum(idx_fw.values*1))
-    
-    dir_data = calc_contrast(data[0, :, :], c_dir)
-    load_data = calc_contrast(data[0, :, :], c_load)
-
-    # prepare for rgb map
-    dat_rgb =np.c_[dir_data,
-               np.zeros(dir_data.shape),
-               load_data].T # Leave the green gun empty 
-    return dat_rgb
+    # get contrast
+    dir_data = get_contrast(subj = subj, 
+                                contrast_vector = c_dir, 
+                                smooth = smooth, 
+                                atlas_space = atlas_space,
+                                type = type, 
+                                ses_id = ses_id)
+    return dir_data, load_data
 
 def get_enc_ret_dir_contrast(subj = "group", 
                             smooth = 3, 
@@ -181,28 +208,119 @@ def get_enc_ret_dir_contrast(subj = "group",
         type (str) - type of the extracted data to be used
     """
     # get dataset
-    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                    atlas=atlas_space,
-                                    sess=ses_id,
-                                    subj=subj,
-                                    type = type,  
-                                    smooth = smooth)
+    # get dataset class
+    Data = ds.get_dataset_class(gl.base_dir, 'WMFS')
+    # get info
+    info = Data.get_info(ses_id=ses_id,type=type, subj=subj)
     
     # make contrast vector for encoding and retrieval
     # get indices for all the enc contrasts
     idx_enc = (info.phase == 0) & (info.recall == dir)
     c_enc = (idx_enc.values*1)/np.sum(idx_enc.values*1)
-    enc_data = calc_contrast(data[0, :, :], c_enc)
+    # get contrast
+    enc_data = get_contrast(subj = subj, 
+                            contrast_vector = c_enc, 
+                            smooth = smooth, 
+                            atlas_space = atlas_space,
+                            type = type, 
+                            ses_id = ses_id)
     # get indices for all retrieval contrasts
     idx_ret = info.phase == 1 & (info.recall == dir)
     c_ret = (idx_ret.values*1)/np.sum(idx_ret.values*1)
-    ret_data = calc_contrast(data[0, :, :], c_ret)
+    ret_data = get_contrast(subj = subj, 
+                            contrast_vector = c_ret, 
+                            smooth = smooth, 
+                            atlas_space = atlas_space,
+                            type = type, 
+                            ses_id = ses_id)
 
     # prepare for rgb map
     dat_rgb =np.c_[enc_data,
                np.zeros(enc_data.shape),
                ret_data].T # Leave the green gun empty 
+    return enc_data, ret_data
+
+def get_load_dir_conj(type = "CondAll", 
+                        phase = 0,
+                        ses_id = "ses-02",  
+                        atlas_space = "fs32k", 
+                        smooth = 3):
+    """
+    """
+
+    dir_data_sub, load_data_sub = get_load_dir_contrast(subj = None, 
+                                                smooth = smooth,
+                                                atlas_space = atlas_space, 
+                                                type = type, 
+                                                phase = phase, 
+                                                ses_id = ses_id)
+    # do test
+    load_data, p_val_load = ttest_1samp(load_data_sub, axis = 0, popmean = 0, nan_policy = 'omit', alternative = 'greater')
+    dir_data, p_val_dir = ttest_1samp(dir_data_sub, axis = 0, popmean = 0, nan_policy = 'omit', alternative='greater')
+
+    return dir_data, load_data
+
+def get_enc_ret_conj(type = "CondAll", 
+                        ses_id = "ses-02",  
+                        atlas_space = "fs32k", 
+                        smooth = 3):
+
+    """
+    """
+    enc_data_sub, ret_data_sub = get_enc_ret_contrast(subj = None, 
+                                                        smooth = smooth,
+                                                        atlas_space = atlas_space, 
+                                                        type = type, 
+                                                        ses_id = ses_id)
+    # do test
+    enc_data, p_val_load = ttest_1samp(enc_data_sub, axis = 0, popmean = 0, nan_policy = 'omit', alternative = 'greater')
+    ret_data, p_val_dir = ttest_1samp(ret_data_sub, axis = 0, popmean = 0, nan_policy = 'omit', alternative='greater')
+
+    return enc_data, ret_data
+
+def calc_enc_ret_reliability(subj = None, 
+                    smooth = 3, 
+                    atlas_space = "SUIT3",
+                    type = "CondHalf", 
+                    ses_id = "ses-02"):
+
+    """
+    """
+    # get dataset class
+    Data = ds.get_dataset_class(gl.base_dir, 'WMFS')
+    # get info
+    info = Data.get_info(ses_id=ses_id,type=type, subj=subj)
+    
+    # make contrast vector for encoding and retrieval
+    # get indices for all the enc contrasts
+    idx_enc = info.phase == 0
+    c_enc = (idx_enc.values*1)/np.sum(idx_enc.values*1)
+    # get contrast
+    enc_data = get_contrast(subj = subj, 
+                            contrast_vector = c_enc, 
+                            smooth = smooth, 
+                            atlas_space = atlas_space,
+                            type = type, 
+                            ses_id = ses_id)
+
+    # get indices for all retrieval contrasts
+    idx_ret = info.phase == 1
+    c_ret = (idx_ret.values*1)/np.sum(idx_ret.values*1)
+    # get contrast
+    ret_data = get_contrast(subj = subj, 
+                            contrast_vector = c_ret, 
+                            smooth = smooth, 
+                            atlas_space = atlas_space,
+                            type = type, 
+                            ses_id = ses_id)
+
+
+    
     return
+
+def calc_overlap_corr():
+    return
+
 
 def plot_rgb_map(data_rgb, 
                  atlas_space = "SUIT3", 
@@ -469,14 +587,6 @@ def conjunction_ana_cortex(type = "CondAll",
     data_load_arr = np.concatenate(data_load_subs, axis = 0)
     data_recall_arr = np.concatenate(data_recall_subs, axis = 0)
 
-    # do the test per hemisphere
-    # load_sub_list = nt.surf_from_cifti(atlas.data_to_cifti(data_load_arr))
-    # recall_sub_list = nt.surf_from_cifti(atlas.data_to_cifti(data_recall_arr))
-    
-    # t_val_load_list = []
-    # t_val_recall_list = []
-    # for h, hemi in enumerate(["L", "R"]):
-
     t_val_load, p_val_load = ttest_1samp(data_load_arr, axis = 0, popmean = 0, nan_policy = 'omit', alternative = 'greater')
     # t_val_load_list.append(t_val_load)
     load_list = nt.surf_from_cifti(atlas.data_to_cifti(t_val_load))
@@ -582,5 +692,9 @@ def plot_contrast_cerebellum(subject, phase = "Enc", effect = "load", save_svg =
 
 
 if __name__=="__main__":
-    
+    get_enc_ret_contrast(subj = "group", 
+                        smooth = 3, 
+                        atlas_space = "SUIT3",
+                        type = "CondAll", 
+                        ses_id = "ses-02")
     pass

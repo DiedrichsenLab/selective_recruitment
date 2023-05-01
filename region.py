@@ -12,7 +12,7 @@ from pathlib import Path
 from collections import OrderedDict
 from matplotlib.colors import LinearSegmentedColormap
 
-def get_label_info(parcellation):
+def get_label_names(parcellation):
     # get the lookuptable for the parcellation
     lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}.lut')
 
@@ -23,6 +23,36 @@ def get_label_info(parcellation):
         label_info.insert(0, '0')
     cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
     return label_info
+
+def get_region_info(label = 'NettekovenSym68c32AP', roi_super = "D"):
+    # get the roi numbers of Ds only
+    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
+    
+    
+    D_indx = [label_names.index(name) for name in label_names if roi_super in name]
+    D_name = [name for name in label_names if roi_super in name]
+
+    # get the colors of Ds
+    colors_D = colors[D_indx, :]
+
+    D_list = []
+    for rr, reg in enumerate(D_indx):
+        reg_dict = {}
+        reg_dict['roi'] = reg
+        reg_dict['roi_name'] = D_name[rr]
+        reg_dict['roi_id'] = rr
+        if 'L' in label_names[reg]:
+            reg_dict['roi_side'] = 'L'
+        if 'R' in label_names[reg]:
+            reg_dict['roi_side'] = 'R'
+        if 'A' in label_names[reg]:
+            reg_dict['roi_AP'] = 'A'
+        if 'P' in label_names[reg]:
+            reg_dict['roi_AP'] ='P'
+        D_list.append(pd.DataFrame(reg_dict, index=[rr]))
+    Dinfo = pd.concat(D_list)
+
+    return Dinfo, D_indx, colors_D
 
 def divide_by_horiz(atlas_space = "SUIT3", label = "NettekovenSym68c32"):
     """

@@ -39,33 +39,35 @@ def load_data(ses_id = 'ses-02',
                 reg = "A8",):
     """
     """    
-    X,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+    Y,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
                                     atlas=atlas_space,
                                     sess=ses_id,
                                     subj=subj,
                                     type = type)
-    Y,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+    X,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
                                     atlas="fs32k",
                                     sess=ses_id,
                                     subj=subj,
                                     type = type)
     model_path = os.path.join(ccc_gl.conn_dir,atlas_space,'train',mname)
-    fname = model_path + f"/{m}_{reg}_avg.h5"
-    json_name = model_path + f"/{m}_{reg}_{sub}.json"
+    fname = model_path + f"/{mname}_{reg}_avg.h5"
+    json_name = model_path + f"/{mname}_{reg}_avg.json"
     conn_model = dd.io.load(fname)
 
-    atlas = am.get_atlas('fs32k',futil.atlas_dir)
-    label=[cortex+'.L.label.gii',cortex+'.R.label.gii']
+    atlas,ainf = am.get_atlas('fs32k',gl.atlas_dir)
+    label=[gl.atlas_dir+'/tpl-fs32k/'+cortex+'.L.label.gii',
+           gl.atlas_dir+'/tpl-fs32k/'+cortex+'.R.label.gii']
     atlas.get_parcel(label,unite_struct=False)
     X, parcel_labels = ds.agg_parcels(X , 
                                          atlas.label_vector, 
                                          fcn=np.nanmean)
+    YP = conn_model.predict(X)
+    Y,_ = ra.add_rest_to_data(Y,info)
+    YP,info = ra.add_rest_to_data(YP,info)
 
-
-
-    return X,Y
-
+    ra.map_regress(Y,YP,intercept='common',slope='common')
+    return Y,YP,atlas
 
 if __name__=="__main__":
-    X,Y = load_data(ses_id = 'ses-02')
+    Y,YP,atlas = load_data(ses_id = 'ses-02',subj=[0,1,2])
     pass

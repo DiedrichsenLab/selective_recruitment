@@ -82,7 +82,8 @@ def get_summary_conn(dataset = "WMFS",
 
     # add rest condition for control?
     if add_rest:
-        Yhat_parcel,Y_parcel,info = ra.add_rest_to_data(Yhat_parcel,Y_parcel,info)
+        Yhat_parcel,_ = ra.add_rest_to_data(Yhat_parcel,info)
+        Y_parcel,info = ra.add_rest_to_data(Y_parcel,info)
         
     # Transform into a dataframe with Yhat and Y data 
     n_subj,n_cond,n_roi = Yhat_parcel.shape

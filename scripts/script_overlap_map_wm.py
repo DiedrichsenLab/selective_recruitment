@@ -20,11 +20,13 @@ import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
 import Functional_Fusion.util as futil
 import Functional_Fusion.matrix as fmatrix
+
 import selective_recruitment.globals as gl
 import selective_recruitment.recruite_ana as ra
 import selective_recruitment.rsa as srsa
-import cortico_cereb_connectivity.evaluation as ccev
+
 import Correlation_estimation.util as corr_util
+
 import PcmPy as pcm
 import SUITPy as suit
 # import surfAnalysisPy.stats as sas
@@ -91,8 +93,9 @@ def smooth_cifti_data(sigma = 3,
                               )
     return
 
+
 def get_contrast(subj = None, 
-                 contrast_vector = None, 
+                 contrast_idx = None, 
                  smooth = 3, 
                  atlas_space = "SUIT3",
                  type = "CondAll", 
@@ -108,99 +111,81 @@ def get_contrast(subj = None,
                                     type = type,  
                                     smooth = smooth)
 
+    # get partition
+    partition_col = type[4:].lower()
+    if partition_col != "all":
+        part_vec = info[partition_col].values
+    else:
+        part_vec = np.ones([len(info)],)
+
+    n_part = len(np.unique(part_vec))
+    parts = np.unique(part_vec)
     # get contrast per subject
     n_subj, _, n_vox = data.shape
-    con_data = np.zeros([n_subj, 1, n_vox])
+    con_data = np.zeros([n_subj, n_part, n_vox])
     for s in range(n_subj):
-        A = contrast_vector.reshape(-1, 1).T@data[s, :, :]
-        con_data[s, :, : ] = contrast_vector.reshape(-1, 1).T@data[s, :, :]
+        for p, pn in enumerate(parts): 
+            # get indices of the partition
+            idx_part = part_vec == pn
+            # per partition
+            Z_part = fmatrix.indicator(idx_part, positive = False)
+            # make contrast vector for current partition
+            contrast_vector = contrast_idx[idx_part].values
+            contrast_vector = contrast_vector/(Z_part.T @ contrast_vector)  
+            con_data[s, p, : ] = contrast_vector.reshape(-1, 1).T@data[s, idx_part, :]
 
     return con_data
+
+
+def get_reliability(X, 
+                    part_vec,
+                    voxel_wise=False,
+                    subtract_mean=True):
+    """ Calculates the within-subject reliability of a data set
+    Data (X) is grouped by condition vector, and the
+    partition vector indicates the independent measurements
+
+    Args:
+        X (ndarray): num_subj x num_trials x num_voxel tensor of data
+        part_vec (ndarray): num_trials partition vector
+        voxel_wise (bool): Return the results as map or overall?
+        subtract_mean (bool): Remove the mean per voxel before correlation calc?
+    Returns:
+        r (ndarray)L: num_subj x num_partition matrix of correlations
+    """
+    partitions = np.unique(part_vec)
+    n_part = partitions.shape[0]
+    n_subj = X.shape[0]
+    if voxel_wise:
+        r = np.zeros((n_subj, n_part, X.shape[2]))
+    else:
+        r = np.zeros((n_subj, n_part))
+    for s in np.arange(n_subj):
+        for pn, part in enumerate(partitions):
+            i1 = part_vec == part
+            i2 = part_vec != part
+            X1 = X[s, i1, :]
+            X2 = X[s, i2, :]
+            # Check if this partition contains nan row
+            if subtract_mean:
+                X1 -= np.nanmean(X1, axis=0)
+                X2 -= np.nanmean(X2, axis=0)
+            if voxel_wise:
+                r[s, pn, :] = np.nansum(X1 * X2, axis=0) / \
+                    sqrt(np.nansum(X1 * X1, axis=0)
+                         * np.nansum(X2 * X2, axis=0))
+            else:
+                r[s, pn] = np.nansum(X1 * X2) / \
+                    sqrt(np.nansum(X1 * X1) * np.nansum(X2 * X2))
+    return r
+
 
 def get_enc_ret_contrast(subj = "group", 
                         smooth = 3, 
                         atlas_space = "SUIT3",
                         type = "CondAll", 
+                        recall_dir = None, 
                         ses_id = "ses-02"):
-    """
-    Args:
-        subj (str or None) - input None for all the subjects
-        smooth (bool) - True if you want to ues smoothed data
-        type (str) - type of the extracted data to be used
-    """
-    # get dataset class
-    Data = ds.get_dataset_class(gl.base_dir, 'WMFS')
-    # get info
-    info = Data.get_info(ses_id=ses_id,type=type, subj=subj)
-    
-    # make contrast vector for encoding and retrieval
-    # get indices for all the enc contrasts
-    idx_enc = info.phase == 0
-    c_enc = (idx_enc.values*1)/np.sum(idx_enc.values*1)
-    # get contrast
-    enc_data = get_contrast(subj = subj, 
-                            contrast_vector = c_enc, 
-                            smooth = smooth, 
-                            atlas_space = atlas_space,
-                            type = type, 
-                            ses_id = ses_id)
-    # get indices for all retrieval contrasts
-    idx_ret = info.phase == 1
-    c_ret = (idx_ret.values*1)/np.sum(idx_ret.values*1)
-    # get contrast
-    ret_data = get_contrast(subj = subj, 
-                            contrast_vector = c_ret, 
-                            smooth = smooth, 
-                            atlas_space = atlas_space,
-                            type = type, 
-                            ses_id = ses_id)
-
-    return enc_data, ret_data
-
-def get_load_dir_contrast(subj = "group", 
-                        smooth = False,
-                        atlas_space = "SUIT3", 
-                        type = "CondAll", 
-                        phase = 0, 
-                        ses_id = "ses-02"):
-    """
-    """
-    # get dataset class
-    Data = ds.get_dataset_class(gl.base_dir, 'WMFS')
-    # get info
-    info = Data.get_info(ses_id=ses_id,type=type, subj=subj)
-    
-    # make contrast vector for load effect
-    idx_load6 = (info.phase == phase) & (info.recall == 1) & (info.load == 6)
-    idx_load2 = (info.phase == phase) & (info.recall == 1) & (info.load == 2)
-    c_load = ((idx_load6.values*1)/np.sum(idx_load6.values*1)) - ((idx_load2.values*1)/np.sum(idx_load2.values*1))
-    # get contrast
-    load_data = get_contrast(subj = subj, 
-                                contrast_vector = c_load, 
-                                smooth = smooth, 
-                                atlas_space = atlas_space,
-                                type = type, 
-                                ses_id = ses_id)
-
-    # make contrast vector for dir effect
-    idx_bw = (info.phase == phase) & (info.recall == 0) 
-    idx_fw = (info.phase == phase) & (info.recall == 1) 
-    c_dir = ((idx_bw.values*1)/np.sum(idx_bw.values*1)) - ((idx_fw.values*1)/np.sum(idx_fw.values*1))
-    # get contrast
-    dir_data = get_contrast(subj = subj, 
-                                contrast_vector = c_dir, 
-                                smooth = smooth, 
-                                atlas_space = atlas_space,
-                                type = type, 
-                                ses_id = ses_id)
-    return dir_data, load_data
-
-def get_enc_ret_dir_contrast(subj = "group", 
-                            smooth = 3, 
-                            atlas_space = "SUIT3",
-                            type = "CondAll",
-                            dir = 0,  
-                            ses_id = "ses-02"):
     """
     Args:
         subj (str or None) - input None for all the subjects
@@ -208,39 +193,105 @@ def get_enc_ret_dir_contrast(subj = "group",
         type (str) - type of the extracted data to be used
     """
     # get dataset
-    # get dataset class
-    Data = ds.get_dataset_class(gl.base_dir, 'WMFS')
-    # get info
-    info = Data.get_info(ses_id=ses_id,type=type, subj=subj)
-    
-    # make contrast vector for encoding and retrieval
-    # get indices for all the enc contrasts
-    idx_enc = (info.phase == 0) & (info.recall == dir)
-    c_enc = (idx_enc.values*1)/np.sum(idx_enc.values*1)
-    # get contrast
-    enc_data = get_contrast(subj = subj, 
-                            contrast_vector = c_enc, 
-                            smooth = smooth, 
-                            atlas_space = atlas_space,
-                            type = type, 
-                            ses_id = ses_id)
-    # get indices for all retrieval contrasts
-    idx_ret = info.phase == 1 & (info.recall == dir)
-    c_ret = (idx_ret.values*1)/np.sum(idx_ret.values*1)
-    ret_data = get_contrast(subj = subj, 
-                            contrast_vector = c_ret, 
-                            smooth = smooth, 
-                            atlas_space = atlas_space,
-                            type = type, 
-                            ses_id = ses_id)
+    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas=atlas_space,
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type,  
+                                    smooth = smooth)
+    # get partitions
+    partition = type[4:].lower()
+    if partition == "all":
+        part_vec = np.ones([len(info), ])
+    else:
+        part_vec = info[partition].values
 
-    # prepare for rgb map
-    dat_rgb =np.c_[enc_data,
-               np.zeros(enc_data.shape),
-               ret_data].T # Leave the green gun empty 
+    # get number of partitions
+    parts = np.unique(part_vec)
+    n_parts = len(parts)
+    # get number of subjects 
+    n_subj = data.shape[0]
+    # get number of voxels
+    n_vox = data.shape[2]
+    # initialize arrays
+    enc_data = np.zeros([n_subj, n_parts, n_vox])
+    ret_data = np.zeros([n_subj, n_parts, n_vox])
+    for s in range(n_subj):
+        for p, pn in enumerate(parts):
+            # make contrast vector for encoding and retrieval
+            idx_enc = (info.phase == 0) & (part_vec == pn)
+            idx_ret = (info.phase == 1) & (part_vec == pn)
+            if recall_dir is not None:
+                idx_enc = idx_enc & (info.recall == recall_dir)
+                idx_ret = idx_ret & (info.recall == recall_dir)
+
+            c_enc = (idx_enc*1)/np.sum(idx_enc.values*1)            
+            c_ret = (idx_ret*1)/np.sum(idx_ret.values*1)
+            # get contrasts
+            ## enc:
+            enc_data[s, p, : ] = c_enc.values.reshape(-1, 1).T@data[s]
+            ## ret:
+            ret_data[s, p, : ] = c_ret.values.reshape(-1, 1).T@data[s]
+
     return enc_data, ret_data
 
-def get_load_dir_conj(type = "CondAll", 
+
+def get_dir_load_contrast(subj = "group", 
+                        smooth = False,
+                        atlas_space = "SUIT3", 
+                        type = "CondAll", 
+                        phase = 0, 
+                        ses_id = "ses-02"):
+    """
+    """
+    # get dataset
+    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                    atlas=atlas_space,
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type,  
+                                    smooth = smooth)
+    # get partitions
+    partition = type[4:].lower()
+    if partition == "all":
+        part_vec = np.ones([len(info), ])
+    else:
+        part_vec = info[partition].values
+
+    # get number of partitions
+    parts = np.unique(part_vec)
+    n_parts = len(parts)
+    # get number of subjects 
+    n_subj = data.shape[0]
+    # get number of voxels
+    n_vox = data.shape[2]
+    # initialize arrays
+    dir_data = np.zeros([n_subj, n_parts, n_vox])
+    load_data = np.zeros([n_subj, n_parts, n_vox])
+
+    for s in range(n_subj):
+        for p, pn in enumerate(parts):
+            # make contrast vector for load and dir
+            ## dir:
+            idx_bw = (info.phase == phase) & (info.recall == 0) & (part_vec == pn)
+            idx_fw = (info.phase == phase) & (info.recall == 1) & (part_vec == pn)
+            c_dir = ((idx_bw*1)/np.sum(idx_bw.values*1))\
+                     - ((idx_fw*1)/np.sum(idx_fw.values*1))
+            ## load:
+            # make contrast vector for load effect
+            idx_load6 = (info.phase == phase) & (info.recall == 1) & (info.load == 6) & (part_vec == pn)
+            idx_load2 = (info.phase == phase) & (info.recall == 1) & (info.load == 2) & (part_vec == pn)
+            c_load = ((idx_load6*1)/np.sum(idx_load6.values*1))\
+                     - ((idx_load2*1)/np.sum(idx_load2.values*1))
+            # get contrasts
+            ## load:
+            load_data[s, p, : ] = c_load.values.reshape(-1, 1).T@data[s]
+            ## ret:
+            dir_data[s, p, : ] = c_dir.values.reshape(-1, 1).T@data[s]
+    return dir_data, load_data
+
+
+def get_dir_load_conj(type = "CondAll", 
                         phase = 0,
                         ses_id = "ses-02",  
                         atlas_space = "fs32k", 
@@ -248,7 +299,7 @@ def get_load_dir_conj(type = "CondAll",
     """
     """
 
-    dir_data_sub, load_data_sub = get_load_dir_contrast(subj = None, 
+    dir_data_sub, load_data_sub = get_dir_load_contrast(subj = None, 
                                                 smooth = smooth,
                                                 atlas_space = atlas_space, 
                                                 type = type, 
@@ -259,6 +310,7 @@ def get_load_dir_conj(type = "CondAll",
     dir_data, p_val_dir = ttest_1samp(dir_data_sub, axis = 0, popmean = 0, nan_policy = 'omit', alternative='greater')
 
     return dir_data, load_data
+
 
 def get_enc_ret_conj(type = "CondAll", 
                         ses_id = "ses-02",  
@@ -278,45 +330,164 @@ def get_enc_ret_conj(type = "CondAll",
 
     return enc_data, ret_data
 
-def calc_enc_ret_reliability(subj = None, 
-                    smooth = 3, 
-                    atlas_space = "SUIT3",
-                    type = "CondHalf", 
-                    ses_id = "ses-02"):
+
+def get_enc_ret_rel_summ(subj = None, 
+                        smooth = 3, 
+                        subtract_mean = True, 
+                        atlas_spaces = ["SUIT3", "fs32k"],
+                        recall_dirs = [None], 
+                        type = "CondHalf", 
+                        ses_id = "ses-02", 
+                        verbose = False):
 
     """
     """
     # get dataset class
-    Data = ds.get_dataset_class(gl.base_dir, 'WMFS')
-    # get info
-    info = Data.get_info(ses_id=ses_id,type=type, subj=subj)
+    dset = ds.get_dataset_class(gl.base_dir, "WMFS")
+    D = []
+    for atlas in atlas_spaces:
+        for dcall in recall_dirs:
+            # get contrasts 
+            ## data[0]: enc effect, data[1]: ret effect
+            data_list = get_enc_ret_contrast(subj = subj, 
+                                        smooth = smooth, 
+                                        atlas_space = atlas,
+                                        type = type, 
+                                        recall_dir = dcall, 
+                                        ses_id = ses_id)
+
+            
+            
+            for p, phase in enumerate(["enc", "ret"]):
+                # calculate reliabilities
+                con_data = data_list[p]
+                alpha_list = []
+                for s in range(con_data.shape[0]):
+                    dat = np.nan_to_num(con_data[s])
+                    # subtract_mean?
+                    if subtract_mean:
+                        dat = dat - np.nanmean(dat, axis = 1, keepdims=True)
+
+                    alpha_list.append(corr_util.calc_cronbach(dat))
+
+                # making the summary dataframe
+                ## get list of subjects
+                subj_list = dset.get_participants().participant_id
+                df_tmp = pd.DataFrame()
+                df_tmp["sn"] = subj_list
+                df_tmp["phase"] = phase
+                df_tmp["effect"] = phase
+                df_tmp["recall_dir"] = dcall
+                df_tmp["alpha"] = alpha_list
+                df_tmp["atlas"] = atlas
+                D.append(df_tmp)
     
-    # make contrast vector for encoding and retrieval
-    # get indices for all the enc contrasts
-    idx_enc = info.phase == 0
-    c_enc = (idx_enc.values*1)/np.sum(idx_enc.values*1)
-    # get contrast
-    enc_data = get_contrast(subj = subj, 
-                            contrast_vector = c_enc, 
-                            smooth = smooth, 
-                            atlas_space = atlas_space,
-                            type = type, 
-                            ses_id = ses_id)
-
-    # get indices for all retrieval contrasts
-    idx_ret = info.phase == 1
-    c_ret = (idx_ret.values*1)/np.sum(idx_ret.values*1)
-    # get contrast
-    ret_data = get_contrast(subj = subj, 
-                            contrast_vector = c_ret, 
-                            smooth = smooth, 
-                            atlas_space = atlas_space,
-                            type = type, 
-                            ses_id = ses_id)
+    return pd.concat(D)
 
 
+def get_dir_load_rel_summ(subj = None, 
+                          smooth = 3, 
+                          subtract_mean = True, 
+                          atlas_spaces = ["SUIT3", "fs32k"],
+                          phases = ["enc", "ret"], 
+                          type = "CondHalf", 
+                          ses_id = "ses-02", 
+                          verbose = False):
+
+    """
+    """
+    # get dataset class
+    dset = ds.get_dataset_class(gl.base_dir, "WMFS")
+    D = []
+    for atlas in atlas_spaces:
+        for p, phase in enumerate(phases):
+            # get contrasts 
+            ## data[0]: dir effect, data[1]: load effect
+            data_list = get_dir_load_contrast(subj = subj, 
+                                        smooth = smooth, 
+                                        atlas_space = atlas,
+                                        type = type, 
+                                        phase = p, 
+                                        ses_id = ses_id)
+            
+            for e, effect in enumerate(["dir", "load"]):
+                # calculate reliabilities
+                con_data = data_list[e]
+                alpha_list = []
+                for s in range(con_data.shape[0]):
+                    dat = np.nan_to_num(con_data[s])
+                    # subtract_mean?
+                    if subtract_mean:
+                        dat = dat - np.nanmean(dat, axis = 1, keepdims=True)
+
+                    alpha_list.append(corr_util.calc_cronbach(dat))
+
+                # making the summary dataframe
+                ## get list of subjects
+                subj_list = dset.get_participants().participant_id
+                df_tmp = pd.DataFrame()
+                df_tmp["sn"] = subj_list
+                df_tmp["phase"] = phase
+                df_tmp["effect"] = effect
+                df_tmp["alpha"] = alpha_list
+                df_tmp["atlas"] = atlas
+                D.append(df_tmp)
     
-    return
+    return pd.concat(D)
+
+
+def get_enc_ret_rel_summ_depricated(subj = None, 
+                                    smooth = 3, 
+                                    subtract_mean = True, 
+                                    atlas_spaces = ["SUIT3", "fs32k"],
+                                    type = "CondHalf", 
+                                    ses_id = "ses-02", 
+                                    verbose = False):
+
+    """
+    """
+    # get partitions
+    partition = type[4:].lower()
+    D = []
+    for atlas in atlas_spaces:
+        # get dataset
+        data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
+                                        atlas=atlas,
+                                        sess=ses_id,
+                                        subj=subj,
+                                        type = type,  
+                                        smooth = smooth)
+
+        for p, phase in enumerate(['enc', 'ret']):
+            info_loop = info.copy()
+            if verbose:
+                print(f"- Doing {atlas} {p}")
+            # get indices for the phase
+            idx = info_loop.phase.values == p
+            # get codition vector
+            cond_vec = info_loop.cond_num.values
+            cond_vec[np.logical_not(idx)] = 0
+            # get within subject reliability
+            r = ds.reliability_within_subj(data, 
+                                            info_loop[partition].values, 
+                                            cond_vec,
+                                            voxel_wise=False,
+                                            subtract_mean=subtract_mean)
+
+            # the first column of r will be all nans
+            # because the condition vector has a value for
+            # the condition of interest and 0 everywhere else
+            # discarding the nans 
+            # make the dataframe
+            df=pd.DataFrame()
+            df["sn"] = dset.get_participants().participant_id
+            df["atlas"] = atlas
+            df["reliability"] = np.nanmean(r, axis = 1)
+            df["contrast"] = phase
+
+            D.append(df)
+    return pd.concat(D)
+
 
 def calc_overlap_corr():
     return
@@ -436,79 +607,6 @@ def calc_overlap_corr(atlas_space = "fs32k",
             nb.save(effect_obj, f"{save_path}/load_recall_space_{atlas_space}_{type}_{subject}.dscalar.nii")        
     return pd.concat(D)
 
-def calc_effect_reliability(atlas_space = "fs32k", subtract_mean = True, 
-                            smooth = True, verbose = False):
-    # preparing the data and atlases for all the structures
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-
-    # create an atlas object 
-    atlas, _ = am.get_atlas(atlas_space, Data.atlas_dir)
-    D = []
-    for ss, subject in enumerate(Data.get_participants().participant_id):
-
-        data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                    atlas=atlas_space,
-                                    sess="ses-02",
-                                    subj=subject,
-                                    type = "CondHalf",  
-                                    smooth = smooth, 
-                                    verbose = verbose)
-        for p, phase in enumerate(['Enc', 'Ret']):
-
-            load_half = []
-            recall_dir_half = []
-            for half in [1, 2]:
-                # get indices for the current phase
-                idx_p = (info.phase == p)
-                
-                # get info and data for the half
-                idx_h = info.half == half
-                info_half = info.loc[idx_h*idx_p]
-                data_half = data[0, idx_h*idx_p, :]
-                # calculate the contrasts
-                load, recall_dir = calc_contrast(data_half, info_half)
-                # Remove the mean per voxel before correlation calc?
-                if subtract_mean:
-                    load -= np.nanmean(load, axis=0)
-                    recall_dir -= np.nanmean(recall_dir, axis=0)
-
-                load = np.nan_to_num(load)
-                recall_dir = np.nan_to_num(recall_dir)
-
-                load_half.append(load)
-                recall_dir_half.append(recall_dir)
-
-            # calculating reliabilities per effect per phase
-            ## first get the load and recall of halves into a np.ndarray
-            load_arr = np.c_[load_half[0], load_half[1]]
-            recall_dir_arr = np.c_[recall_dir_half[0], recall_dir_half[1]]
-            ## append to a list containing effects
-            effect_list = [] # will contain two halves of data for each effect. load comes first
-            effect_list.append(load_arr)
-            effect_list.append(recall_dir_arr)
-            ## keep in mind that load comes first
-            for e, effect in enumerate(["load", "recall_dir"]):
-                alpha_cron = corr_util.calc_cronbach(effect_list[e].T)
-
-                R = corr_util.cosang(effect_list[e][:, 0], effect_list[e][:, 1])
-
-                # preparing the dataframe
-                R_dict = {}
-                R_dict["dataset"] = "WMFS"
-                R_dict["ses_id"] ="ses-02"
-                R_dict["phase"] = phase
-                R_dict["effect"] = effect
-                R_dict["atlas"] = atlas_space
-                R_dict["R"] = R
-                R_dict["a_cron"] = alpha_cron
-                R_dict["sn"] = subject
-
-
-                R_df = pd.DataFrame(R_dict, index = [ss])
-                D.append(R_df)
-
-    return pd.concat(D)
-
 def get_overlap_summary(type = "CondAll", subtract_mean = False, smooth = True, verbose = False):
     """
     wrapper to get the dataframe for quantifying the overlap between the load and recall effects
@@ -532,169 +630,15 @@ def get_overlap_summary(type = "CondAll", subtract_mean = False, smooth = True, 
 
     return D
 
-def get_effect_reliability_summary(smooth = True, verbose = False, subtract_mean = True):
-    """
-    wrapper to get the dataframe for reliability of load and recall effects
-    """
-    D_fs = calc_effect_reliability(atlas_space = "fs32k", 
-                                   subtract_mean=subtract_mean,
-                                   verbose = verbose,
-                                   smooth = smooth)
-    D_suit = calc_effect_reliability(atlas_space = "SUIT3", 
-                                     subtract_mean=subtract_mean, 
-                                     verbose=verbose, 
-                                     smooth = smooth)
 
-    # concatenate the two dataframes to return a full
-    D = pd.concat([D_fs, D_suit], axis = 0)
-    return D
 
-def conjunction_ana_cortex(type = "CondAll", 
-                           phase = 0,
-                           atlas_space = "fs32k", 
-                           smooth = True):
-
-    """
-    """
-    # preparing the data and atlases for all the structures
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-    # get list of subjects
-    T = Data.get_participants()
-    subject_list = list(T.participant_id.values)
-
-    # get the atlas object for cifit/nifti creation
-    atlas, ainfo = am.get_atlas("fs32k", Data.atlas_dir)
-
-    # loop over subjects and load the cifti
-    data_load_subs = []
-    data_recall_subs = []
-    for s, subject in enumerate(subject_list):
-
-        data_load, data_recall = load_contrast(ses_id = 'ses-02',
-                                    subj = subject,atlas_space=atlas_space,
-                                    phase=phase, 
-                                    type = type,
-                                    smooth = smooth, 
-                                    verbose = False)
-
-        # get data for load
-        data_load_subs.append(data_load[np.newaxis, ...])
-
-        # get the data for recall
-        data_recall_subs.append(data_recall[np.newaxis, ...])
-
-    # create array containing data for all subjects
-    data_load_arr = np.concatenate(data_load_subs, axis = 0)
-    data_recall_arr = np.concatenate(data_recall_subs, axis = 0)
-
-    t_val_load, p_val_load = ttest_1samp(data_load_arr, axis = 0, popmean = 0, nan_policy = 'omit', alternative = 'greater')
-    # t_val_load_list.append(t_val_load)
-    load_list = nt.surf_from_cifti(atlas.data_to_cifti(t_val_load))
-
-    t_val_recall, p_val_recall = ttest_1samp(data_recall_arr, axis = 0, popmean = 0, nan_policy = 'omit', alternative='greater')
-    # t_val_recall_list.append(t_val_recall)
-
-    # return t_val_load_list, t_val_recall_list
-    return t_val_load, t_val_recall
-
-def conjunction_ana_cerebellum(type = "CondAll", 
-                           phase = 0,
-                           atlas_space = "SUIT3", 
-                           smooth = True):
-
-    """
-    """
-    # preparing the data and atlases for all the structures
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-    # get list of subjects
-    T = Data.get_participants()
-    subject_list = list(T.participant_id.values)
-
-    # get the atlas object for cifit/nifti creation
-    atlas, ainfo = am.get_atlas(atlas_space, Data.atlas_dir)
-
-    # loop over subjects and load the cifti
-    data_load_subs = []
-    data_recall_subs = []
-    for s, subject in enumerate(subject_list):
-
-        data_load, data_recall = load_contrast(ses_id = 'ses-02',
-                                    subj = subject,atlas_space=atlas_space,
-                                    phase=phase, 
-                                    type = type,
-                                    smooth = smooth, 
-                                    verbose = False)
-
-        # get data for load
-        data_load_subs.append(data_load[np.newaxis, ...])
-
-        # get the data for recall
-        data_recall_subs.append(data_recall[np.newaxis, ...])
-
-    # create array containing data for all subjects
-    data_load_arr = np.concatenate(data_load_subs, axis = 0)
-    data_recall_arr = np.concatenate(data_recall_subs, axis = 0)
-
-    # do test
-    t_val_load, p_val_load = ttest_1samp(data_load_arr, axis = 0, popmean = 0, nan_policy='omit', alternative="greater")
-
-    t_val_recall, p_val_recall = ttest_1samp(data_recall_arr, axis = 0, popmean = 0, nan_policy = 'omit', alternative = "greater")
-
-    return t_val_load, t_val_recall
-
-def plot_contrast_cerebellum(subject, phase = "Enc", effect = "load", save_svg = False):
-    """
-    """
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-
-    # get the cerebellar atlas object
-    atlas, ainfo = am.get_atlas('SUIT3', Data.atlas_dir)
-    # which contrast?
-    effect_name = f"{phase}_{effect}"
-    # load the cifti
-    cifti = nb.load(f"{wkdir}/data/{subject}/load_recall_space_SUIT3_CondAll_{subject}.dscalar.nii")
-
-    # get the names of the contrasts
-    con_names = list(cifti.header.get_axis(0).name)
-
-    # print(cifti.get_fdata().shape)
-
-    # get the index of the contrast in question
-    idx = con_names.index(effect_name)
-
-    # get the map
-    cerebellar_map = cifti.get_fdata()[idx, :]
-
-    # make a nifti object of the map
-    nifti = atlas.data_to_nifti(cerebellar_map)
-
-    # transfer to flat surface
-    img_flat = suit.flatmap.vol_to_surf([nifti], stats='nanmean', space = 'SUIT')
-
-    # plot
-    ax = suit.flatmap.plot(data=img_flat, 
-                      render="plotly", 
-                      hover='auto', 
-                      cmap = "coolwarm", 
-                      colorbar = True, 
-                      bordersize = 1, 
-                      cscale = (-0.1, 0.1))
-
-    # ax.show()
-    ax.update_layout(title = {'text':f"{phase}_{effect}_{subject}", 
-                              'y':0.95,
-                              'x':0.5,
-                              'xanchor': 'center'})
-    ax.show()
-    if save_svg:
-        ax.write_image(f"{wkdir}/figures/flatmap_{phase}_{effect}_{subject}.svg")
-    return 
 
 
 if __name__=="__main__":
-    get_enc_ret_contrast(subj = "group", 
+    D =get_dir_load_rel_summ(subj = None, 
                         smooth = 3, 
-                        atlas_space = "SUIT3",
-                        type = "CondAll", 
-                        ses_id = "ses-02")
-    pass
+                        subtract_mean = True, 
+                        atlas_spaces = ["SUIT3", "fs32k"],
+                        type = "CondHalf", 
+                        ses_id = "ses-02", 
+                        verbose = False)

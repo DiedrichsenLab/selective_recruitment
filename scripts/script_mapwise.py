@@ -65,9 +65,25 @@ def load_data(ses_id = 'ses-02',
     Y,_ = ra.add_rest_to_data(Y,info)
     YP,info = ra.add_rest_to_data(YP,info)
 
-    ra.map_regress(Y,YP,intercept='common',slope='common')
-    return Y,YP,atlas
+    return Y,YP,atlas,info
 
 if __name__=="__main__":
-    Y,YP,atlas = load_data(ses_id = 'ses-02',subj=[0,1,2])
+    atlas_space='SUIT3'
+    Y,YP,cortex_atlas,info = load_data(ses_id = 'ses-02',
+                                       atlas_space=atlas_space)
+    res,coef,R2 = ra.map_regress(Y,YP,fit_intercept=True,fit='common')
+    atlas_cereb,ainf = am.get_atlas(atlas_space,gl.atlas_dir)
+    
+    # calculate the mean and t-test for a specific residual
+    index = np.where(info.cond_name=='L2F_encode ')[0][0]
+    mean = np.nanmean(res[:,index,:],axis=0)
+    std = np.nanstd(res[:,index,:],axis=0)
+    N = np.sum(~np.isnan(res[:,index,:]),axis=0)
+    T = mean/std*np.sqrt(N)
+    data = np.nanmean(Y[:,index,:],axis=0)
+
+    X = atlas_cereb.data_to_nifti(T)
+    sdata = suit.flatmap.vol_to_surf(X)
+    fig = suit.flatmap.plot(sdata,render='plotly')
+    fig.show()
     pass

@@ -209,3 +209,41 @@ def integrate_subparcels(atlas_space = "SUIT3", label = "NettekovenSym68c32", LR
     # save the lookuptable
     nt.save_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{fname}.lut", idx_new, np.array(colors_new), label_names_new)
     return
+
+def make_parcelfs32k_lut(atlas_space = "fs32k", label = "glasser"):
+    """
+    makes a lut file for the parcellation in fs32k based on the label.gii file
+    Args:
+        atlas_space (str) - default is "fs32k"
+        label (str) - name of the parcellation label.gii file saved in atl-fs32k directory
+    """
+
+    # load in the parcellation label file
+    label_file = [nb.load(f"{gl.atlas_dir}/tpl-fs32k/{label}.{hemi}.label.gii") for hemi in ["L", "R"]]
+
+    # get the color rgba values
+    ## get_gifti_colortable returns rgba values and cmap object.
+    ## we only need the first item it returns - > index = 0
+    color_list = [nt.get_gifti_colortable(label_file[h],ignore_zero=False)[0] for h in [0, 1]]
+
+    # get gifti labels
+    ## get_gifti_labels returns a list, it needs to be converted to a numpy array
+    label_names = [np.array(nt.get_gifti_labels(label_file[h])) for h in [0, 1]]
+
+    # make indices
+    label_idx = [np.arange(len(color_list[h])) for h in [0, 1]]
+
+    # concatenate colors and label names for left and right
+    colors = np.concatenate(color_list, axis = 0)
+    labels = np.concatenate(label_names, axis = 0)
+    indices = np.concatenate(label_idx, axis = 0)
+
+    # make the lut file
+    fname = f"{gl.atlas_dir}/tpl-fs32k/atl-{label}.lut"
+    nt.save_lut(fname,indices,colors,labels)
+    return
+
+if __name__ == "__main__":
+    make_parcelfs32k_lut(atlas_space = "fs32k", label = "glasser")
+
+    pass

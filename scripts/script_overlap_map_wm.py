@@ -94,92 +94,6 @@ def smooth_cifti_data(sigma = 3,
     return
 
 
-def get_contrast(subj = None, 
-                 contrast_idx = None, 
-                 smooth = 3, 
-                 atlas_space = "SUIT3",
-                 type = "CondAll", 
-                 ses_id = "ses-02"):
-    """
-    """
-
-    # get dataset
-    data,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                    atlas=atlas_space,
-                                    sess=ses_id,
-                                    subj=subj,
-                                    type = type,  
-                                    smooth = smooth)
-
-    # get partition
-    partition_col = type[4:].lower()
-    if partition_col != "all":
-        part_vec = info[partition_col].values
-    else:
-        part_vec = np.ones([len(info)],)
-
-    n_part = len(np.unique(part_vec))
-    parts = np.unique(part_vec)
-    # get contrast per subject
-    n_subj, _, n_vox = data.shape
-    con_data = np.zeros([n_subj, n_part, n_vox])
-    for s in range(n_subj):
-        for p, pn in enumerate(parts): 
-            # get indices of the partition
-            idx_part = part_vec == pn
-            # per partition
-            Z_part = fmatrix.indicator(idx_part, positive = False)
-            # make contrast vector for current partition
-            contrast_vector = contrast_idx[idx_part].values
-            contrast_vector = contrast_vector/(Z_part.T @ contrast_vector)  
-            con_data[s, p, : ] = contrast_vector.reshape(-1, 1).T@data[s, idx_part, :]
-
-    return con_data
-
-
-def get_reliability(X, 
-                    part_vec,
-                    voxel_wise=False,
-                    subtract_mean=True):
-    """ Calculates the within-subject reliability of a data set
-    Data (X) is grouped by condition vector, and the
-    partition vector indicates the independent measurements
-
-    Args:
-        X (ndarray): num_subj x num_trials x num_voxel tensor of data
-        part_vec (ndarray): num_trials partition vector
-        voxel_wise (bool): Return the results as map or overall?
-        subtract_mean (bool): Remove the mean per voxel before correlation calc?
-    Returns:
-        r (ndarray)L: num_subj x num_partition matrix of correlations
-    """
-    partitions = np.unique(part_vec)
-    n_part = partitions.shape[0]
-    n_subj = X.shape[0]
-    if voxel_wise:
-        r = np.zeros((n_subj, n_part, X.shape[2]))
-    else:
-        r = np.zeros((n_subj, n_part))
-    for s in np.arange(n_subj):
-        for pn, part in enumerate(partitions):
-            i1 = part_vec == part
-            i2 = part_vec != part
-            X1 = X[s, i1, :]
-            X2 = X[s, i2, :]
-            # Check if this partition contains nan row
-            if subtract_mean:
-                X1 -= np.nanmean(X1, axis=0)
-                X2 -= np.nanmean(X2, axis=0)
-            if voxel_wise:
-                r[s, pn, :] = np.nansum(X1 * X2, axis=0) / \
-                    sqrt(np.nansum(X1 * X1, axis=0)
-                         * np.nansum(X2 * X2, axis=0))
-            else:
-                r[s, pn] = np.nansum(X1 * X2) / \
-                    sqrt(np.nansum(X1 * X1) * np.nansum(X2 * X2))
-    return r
-
-
 def get_enc_ret_contrast(subj = "group", 
                         smooth = 3, 
                         atlas_space = "SUIT3",
@@ -377,7 +291,7 @@ def get_enc_ret_rel_summ(subj = None,
                 df_tmp["sn"] = subj_list
                 df_tmp["phase"] = phase
                 df_tmp["effect"] = phase
-                df_tmp["recall_dir"] = dcall
+                df_tmp["recall_dir"] = str(dcall)
                 df_tmp["alpha"] = alpha_list
                 df_tmp["atlas"] = atlas
                 D.append(df_tmp)
@@ -436,6 +350,108 @@ def get_dir_load_rel_summ(subj = None,
     return pd.concat(D)
 
 
+def get_enc_ret_overlap_summ(subj = None, 
+                             smooth = 3, 
+                             subtract_mean = True, 
+                             atlas_spaces = ["SUIT3", "fs32k"],
+                             recall_dirs = [None], 
+                             type = "CondHalf", 
+                             ses_id = "ses-02", 
+                             verbose = False):
+
+
+    """
+    """
+    # get dataset class
+    dset = ds.get_dataset_class(gl.base_dir, "WMFS")
+    D = []
+    for atlas in atlas_spaces:
+        for dcall in recall_dirs:
+            # get contrasts 
+            ## data[0]: enc effect, data[1]: ret effect
+            enc_data, ret_data = get_enc_ret_contrast(subj = subj, 
+                                                       smooth = smooth, 
+                                                       atlas_space = atlas,
+                                                       type = type, 
+                                                       recall_dir = dcall, 
+                                                       ses_id = ses_id)
+
+            
+            
+            # calculate reliabilities
+            r_list = []
+            for s in range(enc_data.shape[0]):
+                enc_dat = np.nan_to_num(enc_data[s])
+                ret_dat = np.nan_to_num(ret_data[s])
+                # subtract_mean?
+                if subtract_mean:
+                    enc_dat = enc_dat - np.nanmean(enc_dat, axis = 1, keepdims=True)
+                    ret_dat = ret_dat - np.nanmean(ret_dat, axis = 1, keepdims=True)
+
+                r_list.append(corr_util.cosang(enc_dat,ret_dat))
+
+            # making the summary dataframe
+            ## get list of subjects
+            subj_list = dset.get_participants().participant_id
+            df_tmp = pd.DataFrame()
+            df_tmp["sn"] = subj_list
+            df_tmp["recall_dir"] = str(dcall)
+            df_tmp["r"] = r_list
+            df_tmp["atlas"] = atlas
+            D.append(df_tmp)
+    return pd.concat(D)
+
+
+def get_dir_load_overlap_summ(subj = None, 
+                          smooth = 3, 
+                          subtract_mean = True, 
+                          atlas_spaces = ["SUIT3", "fs32k"],
+                          phases = ["enc", "ret"], 
+                          type = "CondHalf", 
+                          ses_id = "ses-02", 
+                          verbose = False):
+
+    """
+    """
+    # get dataset class
+    dset = ds.get_dataset_class(gl.base_dir, "WMFS")
+    D = []
+    for atlas in atlas_spaces:
+        for p, phase in enumerate(phases):
+            # get contrasts 
+            ## data[0]: dir effect, data[1]: load effect
+            dir_data, load_data = get_dir_load_contrast(subj = subj, 
+                                                        smooth = smooth, 
+                                                        atlas_space = atlas,
+                                                        type = type, 
+                                                        phase = p, 
+                                                        ses_id = ses_id)
+            
+            # calculate reliabilities
+            r_list = []
+            for s in range(dir_data.shape[0]):
+                dir_dat = np.nan_to_num(dir_data[s])
+                load_dat = np.nan_to_num(load_data[s])
+                # subtract_mean?
+                if subtract_mean:
+                    dir_dat = dir_dat - np.nanmean(dir_dat, axis = 1, keepdims=True)
+                    load_dat = load_dat - np.nanmean(load_dat, axis = 1, keepdims=True)
+
+                r_list.append(corr_util.cosang(dir_dat,load_dat))
+
+            # making the summary dataframe
+            ## get list of subjects
+            subj_list = dset.get_participants().participant_id
+            df_tmp = pd.DataFrame()
+            df_tmp["sn"] = subj_list
+            df_tmp["phase"] = phase
+            df_tmp["r"] = r_list
+            df_tmp["atlas"] = atlas
+            D.append(df_tmp)
+    
+    return pd.concat(D)
+
+
 def get_enc_ret_rel_summ_depricated(subj = None, 
                                     smooth = 3, 
                                     subtract_mean = True, 
@@ -489,156 +505,13 @@ def get_enc_ret_rel_summ_depricated(subj = None,
     return pd.concat(D)
 
 
-def calc_overlap_corr():
-    return
-
-
-def plot_rgb_map(data_rgb, 
-                 atlas_space = "SUIT3", 
-                 scale = [0.02, 1, 0.02], 
-                 threshold = [0.02, 1, 0.02]):
-    """
-    plots rgb map of overlap on flatmap
-    Args:
-        data_rgb (np.ndarray) - 3*p array containinig rgb values per voxel/vertex
-        atlas_space (str) - the atlas you are in, either SUIT3 or fs32k
-        scale (list) - how much do you want to scale
-        threshold (list) - threshold to be applied to the values
-    Returns:
-        ax (plt axes object) 
-    """
-    if atlas_space == "SUIT3":
-        atlas, a_info = am.get_atlas(atlas_space,gl.atlas_dir)
-        Nii = atlas.data_to_nifti(data_rgb)
-        data = suit.vol_to_surf(Nii,space='SUIT')
-        rgb = suit.flatmap.map_to_rgb(data,scale=scale,threshold=threshold)
-        ax = suit.flatmap.plot(rgb,overlay_type='rgb', colorbar = True)
-    elif atlas_space == "fs32k":
-        # get the data into surface
-        atlas, a_info = am.get_atlas('fs32k',gl.atlas_dir)
-        
-        dat_cifti = atlas.data_to_cifti(data_rgb)
-
-        # get the lists of data for each hemi
-        dat_list = nt.surf_from_cifti(dat_cifti)
-
-        ax = []
-        for i,hemi in enumerate(['L', 'R']):
-            plt.figure()
-            rgb = suit.flatmap.map_to_rgb(dat_list[i].T,scale,threshold=threshold)
-            ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
-
-    return ax
-
-
-def calc_overlap_corr(atlas_space = "fs32k", 
-                      type = "CondAll",
-                      subtract_mean = False,  
-                      smooth = True,
-                      group = False, 
-                      verbose = False,
-                      save = False):
-    """
-    calculates the correlations between effects
-    """
-    # preparing the data and atlases for all the structures
-    Data = ds.get_dataset_class(gl.base_dir, dataset="WMFS")
-    if group:
-        subject_list = ["group"]
-    else: 
-        subject_list = Data.get_participants().participant_id
-    # create an atlas object 
-    atlas, _ = am.get_atlas(atlas_space, Data.atlas_dir)
-    D = []
-    for subject in subject_list:
-        effect_list = []
-        col_names = []
-        for p, phase in enumerate(['Enc', 'Ret']):
-            data_load, data_recall = load_contrast(ses_id = 'ses-02',
-                                                    subj = subject, atlas_space=atlas_space,
-                                                    phase = p,
-                                                    type = type, 
-                                                    verbose = verbose, 
-                                                    smooth = smooth)
-
-            # Remove the mean per voxel before correlation calc?
-            if subtract_mean:
-                data_load -= np.nanmean(data_load, axis=0)
-                data_recall -= np.nanmean(data_recall, axis=0)
-
-            # calculate correlation between the two maps
-            ## nan to zero
-            data_load = np.nan_to_num(data_load)
-            data_recall = np.nan_to_num(data_recall)
-
-            ## cosine angle between the two maps
-            R = corr_util.cosang(data_load,data_recall)
-
-            # get info
-            R_dict = {}
-            R_dict["dataset"] = "WMFS"
-            R_dict["ses_id"] ="ses-02"
-            R_dict["phase"] = phase
-            R_dict["atlas"] = atlas_space
-            R_dict["R"] = R
-            R_dict["sn"] = subject
-
-            R_df = pd.DataFrame(R_dict, index = [0])
-            D.append(R_df)
-
-            # prepare data to be saved as cifti
-            effect_list.append(data_load.reshape(-1, 1).T)
-            col_names.append(f"{phase}_load")
-
-            effect_list.append(data_recall.reshape(-1, 1).T)
-            col_names.append(f"{phase}_recall_dir")
-
-        # make ciftis and save
-        data_effect = np.concatenate(effect_list, axis = 0)
-        # save ciftis as dscalar
-        effect_obj = atlas.data_to_cifti(data_effect, row_axis = col_names)
-
-        # save the cifti file
-        if save:
-            save_path = f"{wkdir}/data/{subject}"
-            if not os.path.isdir(save_path):
-                os.makedirs(save_path)
-
-            nb.save(effect_obj, f"{save_path}/load_recall_space_{atlas_space}_{type}_{subject}.dscalar.nii")        
-    return pd.concat(D)
-
-def get_overlap_summary(type = "CondAll", subtract_mean = False, smooth = True, verbose = False):
-    """
-    wrapper to get the dataframe for quantifying the overlap between the load and recall effects
-    """
-
-    D_fs = calc_overlap_corr(atlas_space = "fs32k", 
-                            type = type, 
-                            subtract_mean=subtract_mean, 
-                            smooth = smooth, 
-                            verbose=verbose,
-                            save = False)
-    D_suit = calc_overlap_corr(atlas_space = "SUIT3", 
-                            type = type, 
-                            subtract_mean=subtract_mean,
-                            smooth = smooth, 
-                            verbose=verbose, 
-                            save = False)
-    
-    # concatenate the two dataframes to return a full
-    D = pd.concat([D_fs, D_suit], axis = 0)
-
-    return D
-
-
-
-
 
 if __name__=="__main__":
-    D =get_dir_load_rel_summ(subj = None, 
-                        smooth = 3, 
-                        subtract_mean = True, 
-                        atlas_spaces = ["SUIT3", "fs32k"],
-                        type = "CondHalf", 
-                        ses_id = "ses-02", 
-                        verbose = False)
+    D =get_enc_ret_overlap_summ(subj = None, 
+                             smooth = 3, 
+                             subtract_mean = True, 
+                             atlas_spaces = ["SUIT3", "fs32k"],
+                             recall_dirs = [None], 
+                             type = "CondAll", 
+                             ses_id = "ses-02", 
+                             verbose = False)

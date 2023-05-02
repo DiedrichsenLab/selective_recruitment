@@ -505,6 +505,42 @@ def get_enc_ret_rel_summ_depricated(subj = None,
     return pd.concat(D)
 
 
+def plot_rgb_map(data_rgb, 
+                 atlas_space = "SUIT3", 
+                 scale = [0.02, 1, 0.02], 
+                 threshold = [0.02, 1, 0.02]):
+    """
+    plots rgb map of overlap on flatmap
+    Args:
+        data_rgb (np.ndarray) - 3*p array containinig rgb values per voxel/vertex
+        atlas_space (str) - the atlas you are in, either SUIT3 or fs32k
+        scale (list) - how much do you want to scale
+        threshold (list) - threshold to be applied to the values
+    Returns:
+        ax (plt axes object) 
+    """
+    if atlas_space == "SUIT3":
+        atlas, a_info = am.get_atlas(atlas_space,gl.atlas_dir)
+        Nii = atlas.data_to_nifti(data_rgb)
+        data = suit.vol_to_surf(Nii,space='SUIT')
+        rgb = suit.flatmap.map_to_rgb(data,scale=scale,threshold=threshold)
+        ax = suit.flatmap.plot(rgb,overlay_type='rgb', colorbar = True)
+    elif atlas_space == "fs32k":
+        # get the data into surface
+        atlas, a_info = am.get_atlas('fs32k',gl.atlas_dir)
+        
+        dat_cifti = atlas.data_to_cifti(data_rgb)
+
+        # get the lists of data for each hemi
+        dat_list = nt.surf_from_cifti(dat_cifti)
+
+        ax = []
+        for i,hemi in enumerate(['L', 'R']):
+            plt.figure()
+            rgb = suit.flatmap.map_to_rgb(dat_list[i].T,scale,threshold=threshold)
+            ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
+
+    return ax
 
 if __name__=="__main__":
     D =get_enc_ret_overlap_summ(subj = None, 

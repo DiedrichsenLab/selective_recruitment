@@ -267,28 +267,24 @@ def agg_data(tensor, atlas, label, unite_struct = True):
     
     return data, ainfo, parcel_labels
 
-def add_rest_to_data(X,Y,info):
+def add_rest_to_data(X,info):
     """ adds rest to X and Y data matrices and info
     Args:
         X (ndarray): n_subj,n_cond,n_reg data matrix  
-        Y (ndarray):  n_subj,ncond,n_reg data matrix
         info (DataFrame): Dataframe with information 
 
     Returns:
         X (ndarray): n_subj,n_cond+1,n_reg data matrix  
-        Y (ndarray):  n_subj,ncond+1,n_reg data matrix
         info (DataFrame): Dataframe with information 
     """
     n_subj,n_cond,n_reg = X.shape
     X_new = np.zeros((n_subj,n_cond+1,n_reg))
     X_new[:,:-1,:]=X
-    Y_new = np.zeros((n_subj,n_cond+1,n_reg))
-    Y_new[:,:-1,:]=Y
     a = pd.DataFrame({'cond_name':'rest',
                 'reg_id':max(info.reg_id)+1,
                 'cond_num':max(info.reg_id)+1},index=[0])
     info_new = pd.concat([info,pd.DataFrame(a)],ignore_index=True)
-    return X_new,Y_new,info_new
+    return X_new,info_new
 
 def get_summary(dataset = "WMFS", 
                 ses_id = 'ses-02', 
@@ -342,7 +338,8 @@ def get_summary(dataset = "WMFS",
     
     # Want to add rest as a condition?
     if add_rest:
-        X_parcel,Y_parcel,info = add_rest_to_data(X_parcel,Y_parcel,info)
+        X_parcel,_ = add_rest_to_data(X_parcel,info)
+        Y_parcel,info = add_rest_to_data(Y_parcel,info)
     
     # Transform into a dataframe with X and Y data 
     n_subj,n_cond,n_roi = X_parcel.shape

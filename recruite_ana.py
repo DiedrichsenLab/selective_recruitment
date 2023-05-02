@@ -451,8 +451,38 @@ def pcaXY(X, Y, zero_mean = False):
     coef = [intercept,slope]
     return coef,residual, eig_val, eig_vec
 
+
+def run_regress(df,fit_intercept = False):
+    """ Runs regression analysis for each subject and ROI from a data frame 
+    Args:
+        df (DataFrame): Data frame with sn, roi, X & Y (get_summary) 
+        fit_intercept (bool): Use intercept in regression. Default = False
+    Returns:
+        df (DataFrame): resulting data frame
+    """
+    subjs = np.unique(df.sn)
+    rois = np.unique(df.roi)
+    df['slope']=[0]*len(df)
+    df['intercept']=[0]*len(df)
+    df['R2']=[0]*len(df)
+    df['res']=[0]*len(df)
+    for s in subjs:
+        for r in rois:
+            indx = (df.sn==s) & (df.roi==r)
+
+            coef, res, R2 = regressXY(df.X[indx].to_numpy(),
+                                      df.Y[indx].to_numpy(), 
+                                     fit_intercept = fit_intercept)
+            vec = np.ones(res.shape)
+            df.loc[indx,'res'] = res
+            df.loc[indx,'slope'] = coef[-1] * vec
+            if fit_intercept:
+                df.loc[indx,'intercept'] = coef[0] * vec
+            df.loc[indx,'R2']= R2 * vec
+    return df
+
 def run_pca(df, zero_mean = False):
-    """ Runs pca analysis for each subject and ROI. 
+    """ Runs pca analysis for each subject and ROI from a data frame
     Args:
         df (DataFrame): Data frame with sn, roi, X & Y (get_summary) 
         zero_mean (bool): subtract mean from data before pca?. Default = False
@@ -483,52 +513,42 @@ def run_pca(df, zero_mean = False):
 
     return df
 
-def run_regress(df,fit_intercept = False):
-    """ Runs regression analysis for each subject and ROI. 
-    Args:
-        df (DataFrame): Data frame with sn, roi, X & Y (get_summary) 
-        fit_intercept (bool): Use intercept in regression. Default = False
-    Returns:
-        df (DataFrame): resulting data frame
-    """
-    subjs = np.unique(df.sn)
-    rois = np.unique(df.roi)
-    df['slope']=[0]*len(df)
-    df['intercept']=[0]*len(df)
-    df['R2']=[0]*len(df)
-    df['res']=[0]*len(df)
-    for s in subjs:
-        for r in rois:
-            indx = (df.sn==s) & (df.roi==r)
 
-            coef, res, R2 = regressXY(df.X[indx].to_numpy(),
-                                      df.Y[indx].to_numpy(), 
-                                     fit_intercept = fit_intercept)
-            vec = np.ones(res.shape)
-            df.loc[indx,'res'] = res
-            df.loc[indx,'slope'] = coef[-1] * vec
-            if fit_intercept:
-                df.loc[indx,'intercept'] = coef[0] * vec
-            df.loc[indx,'R2']= R2 * vec
-    return df
-
-def map_regress(X,Y,fit_intercept = False,individ_slope = False):
+def map_regress(X,Y,fit_intercept = True,fit = 'common'):
     """ Runs regression analysis for different subjects using a full map-wise approach  
     Args:
         X (ndarray): Predicted cerebellar data (n_subjects x n_cond x n_voxels) 
         Y (ndarray): Observed cerebellar data (n_subjects x n_cond x n_voxels)
-        fit_intercept (bool): Use intercept in regression. Default = False
-        individ_slope (bool): Use individual slopes. Default = False
+        fit_intercept (bool): fir intercept in regression. Default = True
+        fit (str): 'common' or 'separate' .
     Returns:
-        df (DataFrame): resulting data frame
+        res (np.array): Residuals (n_subjects x n_cond x n_voxels)
+        coef (np.array): Coefficients (n_subjects x n_cond x 2)
+        R2 (np.array): R2 (n_subjects) or (n_subjects x n_voxels)
     """
-    n_subjs = X.shape[2]
-    res = np.zeros(X.shape)
-    coef = np.zeros()
-    for s in range(n_subjs):
-        coef, res, R2 = regressXY(X[s,:,:],Y[s,:,:], 
-                fit_intercept = fit_intercept)
+    n_subjs,n_cond,n_vox = X.shape
 
+    res = np.zeros((n_subjs,n_cond,n_vox))
+    if fit == 'common':
+        R2 = np.zeros((n_subjs,))
+        coef = np.zeros((n_subjs,2))
+    else:
+        R2 = np.zeros((n_subjs,n_vox))
+        coef = np.zeros((n_subjs,n_vox,2))
+
+    for s in range(n_subjs):
+        if fit == 'common':
+            good = np.logical_not(np.isnan(X[s,:,:].sum(axis=0)))
+            coef[s,:], r, R2[s] = regressXY(X[s][:,good].flatten(),
+                                      Y[s][:,good].flatten(), 
+                                    fit_intercept = fit_intercept)
+            res[s][:,good] = r.reshape(n_cond,-1)
+        elif fit == 'separate':
+            for v in range(n_vox):
+                coef[s,v,:], res[s,v], R2[s,v] = regressXY(X[s,:,v],
+                                            Y[s,:,v], 
+                                            fit_intercept = fit_intercept)
+    return res,coef,R2
 
 
 def threshold_map(map_data, threshold, binarize = False):

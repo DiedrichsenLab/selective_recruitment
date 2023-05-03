@@ -168,8 +168,6 @@ if __name__ == "__main__":
                         type = "CondHalf", 
                         unite_struct = False,
                         add_rest = True)
-
-    print("hello")
     pass
 
 

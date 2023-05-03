@@ -19,6 +19,61 @@ out_dir = '/Volumes/diedrichsen_data$/data/Cerebellum/CerebellumWorkingMemory/se
 if not Path(out_dir).exists():
     out_dir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 
+def get_summary_data(dataset = "WMFS", 
+                     ses_id = 'ses-02', 
+                     atlas_space = "fs32k",
+                     atlas_roi = "glasser",
+                     type = "CondHalf", 
+                     unite_struct = False,
+                     add_rest = True):
+    """
+    """
+    # get data
+    tensor, info, _ = fdata.get_dataset(gl.base_dir,
+                                        dataset,atlas= atlas_space,
+                                        sess=ses_id,
+                                        type=type, 
+                                        info_only=False)
+
+    # get label file
+    if atlas_space == "fs32k":
+        labels = []
+        for hemi in ['L', 'R']:
+            labels.append(gl.atlas_dir + f'/tpl-fs32k/{atlas_roi}.{hemi}.label.gii')
+        var = "X" # will be used when saving the dataframe
+
+    else:
+        labels = gl.atlas_dir + f'/tpl-SUIT/{atlas_roi}_dseg.nii'
+        var = "Y"
+
+    # get average data per parcel
+    parcel_data, ainfo, parcel_labels = ra.agg_data(tensor, atlas_space, labels, unite_struct = unite_struct)
+    
+    # use lookuptable to get region info
+    region_info = sroi.get_label_names(atlas_roi, atlas_space= atlas_space) 
+    
+    # add rest condition for control?
+    if add_rest:
+        parcel_data,info = ra.add_rest_to_data(parcel_data,info)
+
+    # Transform into a dataframe with Yhat and Y data 
+    n_subj,n_cond,n_roi = parcel_data.shape
+
+    summary_list = [] 
+    for i in range(n_subj):
+        for r in range(n_roi):
+            info_sub = info.copy()
+            vec = np.ones((len(info_sub),))
+            info_sub["sn"]    = i * vec
+            info_sub["roi"]   = parcel_labels[r] * vec
+            info_sub["roi_name"] = region_info[r+1]
+            info_sub[var]     = parcel_data[i,:,r]
+
+            summary_list.append(info_sub)
+        
+    summary_df = pd.concat(summary_list, axis = 0,ignore_index=True)
+
+    return summary_df
 
 def get_summary_conn(dataset = "WMFS", 
                      ses_id = 'ses-02', 
@@ -66,7 +121,7 @@ def get_summary_conn(dataset = "WMFS",
     if cerebellum_roi is not None:
         cerebellum_label = gl.atlas_dir + '/tpl-SUIT' + f'/atl-{cerebellum_roi}_space-SUIT_dseg.nii'
         # use lookuptable to get region info
-        region_info = sroi.get_label_info(cerebellum_roi) 
+        region_info = sroi.get_label_names(cerebellum_roi) 
         # get observed cerebellar data
         Y_parcel, ainfo, Y_parcel_labels = ra.agg_data(tensor_cerebellum, "SUIT3", cerebellum_label, unite_struct = False)
 
@@ -106,22 +161,16 @@ def get_summary_conn(dataset = "WMFS",
 
 
 if __name__ == "__main__":
-    D = get_summary_conn(dataset = "WMFS", 
+    D = get_summary_data(dataset = "WMFS", 
                         ses_id = 'ses-02', 
-                        cerebellum_roi = "NettekovenSym68c32", 
-                        cortex_roi = "Icosahedron1002",
-                        type = "CondHalf",
-                        add_rest=True,  
-                        conn_dataset = "MDTB", 
-                        conn_method = "L2Regression", 
-                        log_alpha = 8, 
-                        conn_ses_id = "ses-s1")
+                        atlas_space = "fs32k",
+                        atlas_roi = "glasser",
+                        type = "CondHalf", 
+                        unite_struct = False,
+                        add_rest = True)
 
-    # do regression
-    D = ra.run_regress(D,fit_intercept=True)
-
-    D.to_csv(out_dir + '/ROI_NettekovenSym68c32_conn_reg.tsv',sep='\t')
-
+    print("hello")
+    pass
 
 
     

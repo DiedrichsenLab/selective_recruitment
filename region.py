@@ -13,9 +13,13 @@ from collections import OrderedDict
 from matplotlib.colors import LinearSegmentedColormap
 
 
-def get_label_names(parcellation):
+def get_label_names(parcellation, atlas_space = "SUIT3"):
+    if atlas_space == "fs32k":
+        atlas_dir = "tpl-fs32k"
+    elif atlas_space == "SUIT3":
+        atlas_dir = 'tpl-SUIT'
     # get the lookuptable for the parcellation
-    lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{parcellation}.lut')
+    lookuptable = nt.read_lut(gl.atlas_dir + f'/{atlas_dir}/atl-{parcellation}.lut')
 
     # get the label info
     label_info = lookuptable[2]

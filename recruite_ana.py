@@ -266,22 +266,22 @@ def get_summary(dataset = "WMFS",
     # get label files for cerebellum and cortex
     ## if None is passed then it will be averaged over the whole
     if cerebellum_roi is not None:
-        cerebellum_roi = gl.atlas_dir + '/' + cerebellum_roi + '_dseg.nii'
+        cerebellum_roi = gl.atlas_dir + '/tpl-SUIT/' + cerebellum_roi + '_dseg.nii'
     if cortex_roi is not None:
         cortex_label = []
         # Ultimately replace this with label CIFTI, to avoid additional code-writing
         for hemi in ['L', 'R']:
-            cortex_label.append(gl.atlas_dir + '/' + cortex_roi + f'.{hemi}.label.gii')
+            cortex_label.append(gl.atlas_dir + '/tpl-fs32k/' + cortex_roi + f'.{hemi}.label.gii')
         cortex_roi = cortex_label
 
     # get the data for all the subjects for cerebellum
     Y_parcel, ainfo, cerebellum_parcel = agg_data(tensor_cerebellum, 
-            atlas = cerebellum_space, 
-            label = cerebellum_roi)
+                                                    atlas = cerebellum_space, 
+                                                    label = cerebellum_roi)
 
     X_parcel, ainfo, cortex_parcel = agg_data(tensor_cortex, 
-            atlas = cortex_space, 
-            label = cortex_roi)
+                                                atlas = cortex_space, 
+                                                label = cortex_roi)
     
     # Want to add rest as a condition?
     if add_rest:
@@ -585,15 +585,15 @@ def make_roi_cortex(cifti_img, info, threshold, localizer = "Verbal2Back"):
     return gifti_img
 
 if __name__ == "__main__":
-    get_reliability_summary(dataset = "WMFS", ses_id = "ses-02", subtract_mean = True)
-    # D = get_summary(dataset = "WMFS", 
-    #             ses_id = 'ses-02', 
-    #             type = "CondAll", 
-    #             cerebellum_roi =None, 
-    #             cortex_roi = None,
-    #             add_rest = True)
-
-    # DD = run_pca(D, zero_mean = True)
+    df = get_summary(dataset = "WMFS", 
+                    ses_id = 'ses-02', 
+                    type = "CondAll", 
+                    cerebellum_space = 'SUIT3',
+                    cortex_space = 'fs32k',
+                    cerebellum_roi ='atl-NettekovenSym68c32_space-SUIT',
+                    cortex_roi = 'glasser',
+                    add_rest = True, 
+                    divide_region = True)
 
 
 

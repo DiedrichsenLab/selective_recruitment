@@ -67,23 +67,45 @@ def load_data(ses_id = 'ses-02',
 
     return Y,YP,atlas,info
 
+def calc_ttest_mean(res,c):
+    """calculates the mean and t-test for a specific residual contrast
+    """
+    Cmean = c @ res
+    cmean = np.nanmean(Cmean,axis=0)
+    std = np.nanstd(Cmean,axis=0)
+    N = np.sum(~np.isnan(Cmean),axis=0)
+    T = cmean/std*np.sqrt(N)
+    return cmean,T
+
+def plot_data_flat(data,atlas_cereb):
+    """plots the data on the flatmap
+    """
+    X = atlas_cereb.data_to_nifti(data)
+    sdata = suit.flatmap.vol_to_surf(X)
+    fig = suit.flatmap.plot(sdata,render='plotly')
+    fig.show()
+
+
 if __name__=="__main__":
     atlas_space='SUIT3'
     Y,YP,cortex_atlas,info = load_data(ses_id = 'ses-02',
                                        atlas_space=atlas_space)
-    res,coef,R2 = ra.map_regress(Y,YP,fit_intercept=True,fit='common')
     atlas_cereb,ainf = am.get_atlas(atlas_space,gl.atlas_dir)
     
-    # calculate the mean and t-test for a specific residual
-    index = np.where(info.cond_name=='L2F_encode ')[0][0]
-    mean = np.nanmean(res[:,index,:],axis=0)
-    std = np.nanstd(res[:,index,:],axis=0)
-    N = np.sum(~np.isnan(res[:,index,:]),axis=0)
-    T = mean/std*np.sqrt(N)
-    data = np.nanmean(Y[:,index,:],axis=0)
 
-    X = atlas_cereb.data_to_nifti(T)
-    sdata = suit.flatmap.vol_to_surf(X)
-    fig = suit.flatmap.plot(sdata,render='plotly')
-    fig.show()
+    # Mapwise regression 
+    res,coef,comvar = ra.map_pca(Y,YP,zero_mean=True,fit='separate')
+    # calculate the mean and t-test for a specific residual
+    c_overall = np.ones(13,)/13
+    index = np.where(info.cond_name=='L6B_encode ')[0][0]
+    c_cond = np.zeros(13,)
+    c_cond[index] = 1
+    c_task = np.ones(13,)/12
+    c_task[-1]=0
+
+    # Overall mean 
+    mean_overall,T_overall = calc_ttest_mean(res,c_overall)
+    plot_data_flat(mean_overall,atlas_cereb)
+
+
     pass

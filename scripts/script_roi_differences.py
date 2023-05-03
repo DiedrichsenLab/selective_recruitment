@@ -30,8 +30,10 @@ import selective_recruitment.scripts.script_prep_sc as ss
 import Functional_Fusion.dataset as fdata
 import Functional_Fusion.atlas_map as am
 from statsmodels.stats.anova import AnovaRM  # perform F test
-import warnings
-warnings.filterwarnings('ignore')
+# import warnings
+# warnings.filterwarnings('ignore')
+
+# TODO: roi differences between cortical rois using glasser/power etc parcellations
 
 
 wkdir = 'A:\data\Cerebellum\CerebellumWorkingMemory\selective_recruit'
@@ -39,8 +41,6 @@ if not Path(wkdir).exists():
     wkdir = '/srv/diedrichsen/data/Cerebellum/CerebellumWorkingMemory/selective_recruit'
 if not Path(wkdir).exists():
     wkdir = '/Users/jdiedrichsen/Data/wm_cerebellum/selective_recruit'
-
-cortex_dir = '/srv/diedrichsen/data/Cortex/ProbabilisticParcellationModel/Models/Models_03/smoothed'
 
 label_dict = {1: 'Enc2F', 2: 'Ret2F',
               3: 'Enc2B', 4: 'Ret2B',
@@ -96,7 +96,7 @@ def plot_roi_differences(D, cond_map, depvar = "Y_norm", var = ["cond_name", "ro
     
 
     # Make sn column into an integer
-    D = norm_within_category(D, category=['roi_name','sn'], value='Y', norm='mean')
+    D = norm_within_category(D, category=['roi_name','sn'], value=depvar[0], norm='mean')
 
     anov = AnovaRM(data=D, depvar=depvar,
                   subject='sn', within=var, aggregate_func=np.mean).fit()
@@ -109,7 +109,7 @@ def plot_roi_differences(D, cond_map, depvar = "Y_norm", var = ["cond_name", "ro
     gray = (0.5,0.5,0.5)
     lb = (0.2,0.5,1.0)
     db = (0.0,0.1,0.6)
-    ax = sns.lineplot(data=D, x = 'cond_num', y = 'Y_norm', hue = 'roi_name',style='roi_name',
+    ax = sns.lineplot(data=D, x = 'cond_num', y = depvar, hue = 'roi_name',style='roi_name',
                 palette=[red,gray,lb,db,red,gray,lb,db],
                 dashes=[d1,d1,d1,d1,d2,d2,d2,d2],
                 err_style=None)

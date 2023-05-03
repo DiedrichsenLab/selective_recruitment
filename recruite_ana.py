@@ -29,41 +29,7 @@ import nitools as nt
 # use subprocess to smooth the cifti files
 # -cifti-smoothing
 
-def make_ant_post_label(atlas_space = "SUIT3"):
-    """
-    Create a mask that divides the cerebellum into anterior and posterior
-    Args:
-        atlas_space (str) - string representing the atlas space
-    Returns:
-        mask_data (np.ndarray)
-        mask_nii (nb.NiftiImage)
-    """
-    # create an instance of atlas object
-    atlas_suit, ainfo = am.get_atlas(atlas_space, gl.atlas_dir)
 
-    # load in the lobules parcellation
-    lobule_file = f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom_space-SUIT_dseg.nii"
-    
-    # get the lobules in the atlas space
-    lobule_data, lobules = atlas_suit.get_parcel(lobule_file)
-
-    # load the lut file for the lobules 
-    idx_lobule, _, lobule_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom.lut")
-
-    # demarcate the horizontal fissure
-    ## horizontal fissure is between crusI and crusII.
-    ## everything above crusII is the anterior part
-    ## find the indices for crusII
-    crusII_idx = [lobule_names.index(name) for name in lobule_names if "CrusII" in name]
-    posterior_idx = idx_lobule[min(crusII_idx):]
-    anterior_idx = idx_lobule[0:min(crusII_idx)]
-
-    # assign value 1 to the anterior part
-    anterior_mask = np.isin(lobule_data, anterior_idx)
-
-    # assign value 2 to the posterior part
-    posterior_mask = np.isin(lobule_data, posterior_idx)
-    return anterior_mask, posterior_mask
 
 def get_smooth_matrix(atlas, fwhm = 3):
     """
@@ -89,25 +55,6 @@ def get_smooth_matrix(atlas, fwhm = 3):
             s_mat_hemi = s_mat_hemi /np.sum(s_mat_hemi, axis = 1)
             smooth_mat.append(s_mat_hemi)
     return smooth_mat
-
-def smooth_surface(cifti_file, 
-                   surface_kernel=2.0,
-                   volume_kernel = 1.0,  
-                   smoothing_direction = 'ROW', 
-                   prefix='s'):
-    """_summary_
-
-    Args:
-        cifti_file (_str_): path to cifti file
-        surface_kernel (float, optional): _smoothing kernel for surface_. Defaults to 2.0.
-        volume_kernel (float, optional): _smoothing kernel for volume in cifti_. Defaults to 1.0.
-        smoothing_direction (str, optional): _direction of smoothing_. Defaults to 'ROW'. other option: 'COLUMN'
-        prefix (str, optional): _prefix added to smoothed file_. Defaults to 's'.
-    """
-    
-    if not cifti_file:
-        sys.exit('Error: No fileList of .func.gii files provided.')
-    subprocess.run(["wb_command","-cifti-smoothing", cifti_file, surface_kernel, volume_kernel, smoothing_direction , f"{prefix}{cifti_file}"])
 
 def get_reliability_summary(dataset = "WMFS", ses_id = "ses-02", subtract_mean = True):
     """
@@ -242,7 +189,7 @@ def agg_data(tensor, atlas, label, unite_struct = True):
     """
     aggregates the data ready for regression over parcels or entire structure
     """
-    # get data tensor
+    # get atlas
     atlas, ainfo = am.get_atlas(atlas,gl.atlas_dir)
 
     # NOTE: atlas.get_parcel takes in path to the label file, not an array
@@ -319,22 +266,22 @@ def get_summary(dataset = "WMFS",
     # get label files for cerebellum and cortex
     ## if None is passed then it will be averaged over the whole
     if cerebellum_roi is not None:
-        cerebellum_roi = gl.atlas_dir + '/' + cerebellum_roi + '_dseg.nii'
+        cerebellum_roi = gl.atlas_dir + '/tpl-SUIT/' + cerebellum_roi + '_dseg.nii'
     if cortex_roi is not None:
         cortex_label = []
         # Ultimately replace this with label CIFTI, to avoid additional code-writing
         for hemi in ['L', 'R']:
-            cortex_label.append(gl.atlas_dir + '/' + cortex_roi + f'.{hemi}.label.gii')
+            cortex_label.append(gl.atlas_dir + '/tpl-fs32k/' + cortex_roi + f'.{hemi}.label.gii')
         cortex_roi = cortex_label
 
     # get the data for all the subjects for cerebellum
     Y_parcel, ainfo, cerebellum_parcel = agg_data(tensor_cerebellum, 
-            atlas = cerebellum_space, 
-            label = cerebellum_roi)
+                                                    atlas = cerebellum_space, 
+                                                    label = cerebellum_roi)
 
     X_parcel, ainfo, cortex_parcel = agg_data(tensor_cortex, 
-            atlas = cortex_space, 
-            label = cortex_roi)
+                                                atlas = cortex_space, 
+                                                label = cortex_roi)
     
     # Want to add rest as a condition?
     if add_rest:
@@ -684,15 +631,15 @@ def make_roi_cortex(cifti_img, info, threshold, localizer = "Verbal2Back"):
     return gifti_img
 
 if __name__ == "__main__":
-    get_reliability_summary(dataset = "WMFS", ses_id = "ses-02", subtract_mean = True)
-    # D = get_summary(dataset = "WMFS", 
-    #             ses_id = 'ses-02', 
-    #             type = "CondAll", 
-    #             cerebellum_roi =None, 
-    #             cortex_roi = None,
-    #             add_rest = True)
-
-    # DD = run_pca(D, zero_mean = True)
+    df = get_summary(dataset = "WMFS", 
+                    ses_id = 'ses-02', 
+                    type = "CondAll", 
+                    cerebellum_space = 'SUIT3',
+                    cortex_space = 'fs32k',
+                    cerebellum_roi ='atl-NettekovenSym68c32_space-SUIT',
+                    cortex_roi = 'glasser',
+                    add_rest = True, 
+                    divide_region = True)
 
 
 

@@ -26,9 +26,9 @@ import nibabel as nb
 from nilearn import plotting
 import nitools as nt
 import deepdish as dd
-
 import scipy.stats as ss
 
+import warnings
 
 def load_data(ses_id = 'ses-02',
                 subj = None,
@@ -71,10 +71,13 @@ def calc_ttest_mean(res,c):
     """calculates the mean and t-test for a specific residual contrast
     """
     Cmean = c @ res
-    cmean = np.nanmean(Cmean,axis=0)
-    std = np.nanstd(Cmean,axis=0)
-    N = np.sum(~np.isnan(Cmean),axis=0)
-    T = cmean/std*np.sqrt(N)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",category=RuntimeWarning)
+        cmean = np.nanmean(Cmean,axis=0)
+        std = np.nanstd(Cmean,axis=0)
+        std[std==0]=np.nan
+        N = np.sum(~np.isnan(Cmean),axis=0)
+        T = cmean/std*np.sqrt(N)
     return cmean,T
 
 def plot_data_flat(data,atlas_cereb):
@@ -104,8 +107,8 @@ if __name__=="__main__":
     c_task[-1]=0
 
     # Overall mean 
-    mean_overall,T_overall = calc_ttest_mean(res,c_overall)
-    plot_data_flat(mean_overall,atlas_cereb)
+    mean_overall,T_overall = calc_ttest_mean(res,c_cond-c_task)
+    plot_data_flat(T_overall,atlas_cereb)
 
 
     pass

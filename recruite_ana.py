@@ -24,6 +24,7 @@ import selective_recruitment.globals as gl
 
 import nibabel as nb
 import nitools as nt
+import warnings
 
 # https://www.humanconnectome.org/software/workbench-command/-all-commands-help
 # use subprocess to smooth the cifti files
@@ -363,7 +364,7 @@ def pcaXY(X, Y, zero_mean = False):
 
     # calculate covariance
     cov = XX.T@XX
-    if np.isnan(XX).any():
+    if (np.isnan(cov).any()) or ((cov==0).any()):
         coef = np.array([np.nan]*2)
         residual = np.zeros(X.shape)*np.nan
         comvar = np.nan
@@ -383,7 +384,7 @@ def pcaXY(X, Y, zero_mean = False):
     if quad_type[0]==-1:
         eig_vec=eig_vec[:,[1,0]]
         eig_val=[eig_val[1],eig_val[0]]
-    elif quad_type[0]==0: 
+    elif quad_type[0]==0:
         raise(NameError('Crazy - X and Y are completely unrelated'))
     
     # Sort eigen vactors: Flip the eigenvectors in the right direction 

@@ -20,7 +20,7 @@ def plot_activation_map(dataset = "WMFS",
                          atlas_space = "SUIT3", 
                          contrast_name = "average", 
                          cmap = "coolwarm",
-                         cscale = [-0.2, 0.2],  
+                         cscale = [-0.2, 0.2], 
                          smooth = None):
     """
     """
@@ -73,7 +73,7 @@ def plot_activation_map(dataset = "WMFS",
                                             # title='Surface left hemisphere',
                                             colorbar=True, 
                                             view = 'lateral',
-                                            cmap="coolwarm",
+                                            cmap=cmap,
                                             engine='plotly',
                                             symmetric_cbar = True,
                                             vmax = cscale[1]

@@ -496,7 +496,7 @@ def map_regress(X,Y,fit_intercept = True,fit = 'common'):
 
     for s in range(n_subjs):
         if fit == 'common':
-            good = np.logical_not(np.isnan(X[s,:,:].sum(axis=0)))
+            good = np.logical_not(np.isnan(Y[s,:,:].sum(axis=0)))
             coef[s,:], r, R2[s] = regressXY(X[s][:,good].flatten(),
                                       Y[s][:,good].flatten(), 
                                     fit_intercept = fit_intercept)

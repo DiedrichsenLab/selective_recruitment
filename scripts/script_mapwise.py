@@ -35,8 +35,9 @@ def load_data(ses_id = 'ses-02',
                 atlas_space='SUIT3',
                 cortex = 'Icosahedron1002',
                 type = "CondAll",
-                mname = "MDTB_all_Icosahedron1002_L2Regression",
-                reg = "A8",):
+                mname = "MDTB_ses-s1_Icosahedron1002_L2Regression",
+                reg = "A8",
+                add_rest = False):
     """
     """    
     Y,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
@@ -62,8 +63,9 @@ def load_data(ses_id = 'ses-02',
                                          atlas.label_vector, 
                                          fcn=np.nanmean)
     YP = conn_model.predict(X)
-    Y,_ = ra.add_rest_to_data(Y,info)
-    YP,info = ra.add_rest_to_data(YP,info)
+    if add_rest:
+        Y,_ = ra.add_rest_to_data(Y,info)
+        YP,info = ra.add_rest_to_data(YP,info)
 
     return Y,YP,atlas,info
 
@@ -97,7 +99,7 @@ if __name__=="__main__":
     
 
     # Mapwise regression 
-    res,coef,comvar = ra.map_pca(Y,YP,zero_mean=True,fit='separate')
+    res,coef,comvar = ra.map_pca(YP,Y,zero_mean=True,fit='separate')
     # calculate the mean and t-test for a specific residual
     c_overall = np.ones(13,)/13
     index = np.where(info.cond_name=='L6B_encode ')[0][0]

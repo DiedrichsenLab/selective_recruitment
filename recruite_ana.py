@@ -532,7 +532,7 @@ def map_pca(X,Y,zero_mean = False,fit = 'common'):
 
     for s in range(n_subjs):
         if fit == 'common':
-            good = np.logical_not(np.isnan(X[s,:,:].sum(axis=0)))
+            good = np.logical_not(np.isnan(Y[s,:,:].sum(axis=0)))
             coef[s,:], r, comvar[s],eigvec = pcaXY(X[s][:,good].flatten(),
                                       Y[s][:,good].flatten(), 
                                     zero_mean = zero_mean)

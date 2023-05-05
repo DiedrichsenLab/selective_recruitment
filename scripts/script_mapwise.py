@@ -90,12 +90,57 @@ def plot_data_flat(data,atlas_cereb):
     fig = suit.flatmap.plot(sdata,render='plotly')
     fig.show()
 
+def check_roi_wise():
+    atlas_space='SUIT3'
+    Y,YP,cortex_atlas,info = load_data(ses_id = 'ses-01',
+                                        subj = None,
+                                        atlas_space='SUIT3',
+                                        cortex = 'Icosahedron1002',
+                                        type = "CondAll",
+                                        mname = "MDTB_ses-s1_Icosahedron1002_L2Regression",
+                                        reg = "A8",
+                                        add_rest = True)
+    # clean up the name string
+    info["cond_name"] = info["cond_name"].str.rstrip("   ")
 
+    res_c,coef_c,R2_c = ra.map_regress(YP,Y,fit_intercept=True,fit='common')
+
+    # make a dataframe
+    n_subj, n_cond, n_reg = res_parcel.shape
+    DD = []
+    for s in range(n_subj):
+        for r in range(n_reg):
+            d = info.copy()
+            a = res_parcel[s, :, r]
+            d["roi"] = (r+1)* np.ones([n_cond])
+            d["res"] = a
+            print(a)
+            d["X"] = YP_parcel[s, :, r]
+            d["Y"] = Y_parcel[s, :, r]
+            d["sn"] = s
+            d["intercept"] = coef_c[s, 0]
+            d["slope"] = coef_c[s, 1]
+            DD.append(d)
+
+    DF = pd.concat(DD, ignore_index = True)
+
+    # get roi_number from D
+    roi_num = 19 #for M3R
+
+    print(AnovaRM(data=DF[DF.cond_name != 'rest'][DF.roi == roi_num], depvar='res',
+                subject='sn', within=['cond_name'], aggregate_func=np.mean).fit())
+    return
 if __name__=="__main__":
     atlas_space='SUIT3'
     Y,YP,cortex_atlas,info = load_data(ses_id = 'ses-02',
                                        atlas_space=atlas_space)
-    atlas_cereb,ainf = am.get_atlas(atlas_space,gl.atlas_dir)
+
+    # do regression and get residuals
+    res_c,coef_c,R2_c = ra.map_regress(YP,Y,fit_intercept=True,fit='common')
+    labels = gl.atlas_dir + f'/tpl-SUIT/atl-NettekovenSym68c32_space-SUIT_dseg.nii'
+    res_parcel, ainfo, parcel_labels = ra.agg_data(res_c, "SUIT3", label = labels, unite_struct = False)
+    Y_parcel, ainfo, parcel_labels = ra.agg_data(Y, "SUIT3", label = labels, unite_struct = False)
+    YP_parcel, ainfo, parcel_labels = ra.agg_data(YP, "SUIT3", label = labels, unite_struct = False) 
     
 
     # Mapwise regression 

@@ -31,6 +31,7 @@ def plot_activation_map(dataset = "WMFS",
                          type = "CondAll", 
                          atlas_space = "SUIT3", 
                          contrast_name = "average", 
+                         render = "plotly", 
                          cmap = "coolwarm",
                          cscale = [-0.2, 0.2], 
                          smooth = None):
@@ -63,7 +64,7 @@ def plot_activation_map(dataset = "WMFS",
         # convert to flatmap
         img_flat = flatmap.vol_to_surf([img_nii], stats='nanmean', space = 'SUIT', ignore_zeros=True)
         ax = flatmap.plot(data=img_flat, 
-                          render="plotly", 
+                          render=render, 
                           hover='auto', 
                           cmap = cmap, 
                           colorbar = True, 
@@ -79,9 +80,9 @@ def plot_activation_map(dataset = "WMFS",
         img_con = nt.surf_from_cifti(img_cii)
         
         ax = []
-        for h in [0, 1]:
+        for h,hemi in enumerate(['left', 'right']):
             fig = plotting.plot_surf_stat_map(
-                                            surfs[0], img_con[0], hemi='left',
+                                            surfs[h], img_con[h], hemi=hemi,
                                             # title='Surface left hemisphere',
                                             colorbar=True, 
                                             view = 'lateral',
@@ -110,7 +111,7 @@ def plot_mapwise_recruitment(data,
     atlas,ainf = am.get_atlas(atlas_space, gl.atlas_dir)
     X = atlas.data_to_nifti(data)
     sdata = flatmap.vol_to_surf(X)
-    fig = flatmap.plot(sdata, render=render, cmap = cmap, cscale = cscale, bordersize = 1.5)
+    fig = flatmap.plot(sdata, render=render, colorbar = True, cmap = cmap, cscale = cscale, bordersize = 1.5)
     return fig
 
 def plot_parcels_super(label = "NettekovenSym68c32", 
@@ -226,20 +227,23 @@ def plot_connectivity_weight(roi_name = "D2R",
     # get the map for the selected region for left and right hemispheres
     weight_roi_list = [weight_map_list[h][idx, :] for h in [0, 1]]
 
-    surf_hemi = []
-    fig_hemi = []
-    for h, hemi in enumerate(['L', 'R']):
-        img = weight_map_list[h]
-        # get the numpy array corresponding to the contrast
-        img_data = weight_roi_list[h]
-        surf_hemi.append(gl.atlas_dir + f"/tpl-fs32k/tpl_fs32k_hemi-{hemi}_inflated.surf.gii")
+    surfs = [gl.atlas_dir + f"/tpl-fs32k/tpl_fs32k_hemi-{hemi}_inflated.surf.gii" for hemi in ['L', 'R']]
+    ax = []
+    for h, hemi in enumerate(['left', 'right']):
 
-        fig_hemi.append(plotting.view_surf(
-                                        surf_hemi[h], img_data, colorbar=True,
-                                        cmap=cmap, vmax = np.nanmax(img_data),
-                                        vmin = np.nanmin(img_data)
-                                        ))
-    return fig_hemi
+        fig = plotting.plot_surf_stat_map(
+                                        surfs[h], weight_roi_list[h], hemi=hemi,
+                                        # title='Surface left hemisphere',
+                                        colorbar=True, 
+                                        view = 'lateral',
+                                        cmap=cmap,
+                                        engine='plotly',
+                                        symmetric_cbar = True,
+                                        vmax = np.nanmax(weight_roi_list[0]),
+                                    )
+        print(np.nanmax(weight_roi_list[0]))
+        ax.append(fig.figure)
+    return ax
 
 if __name__ == "__main__":
     plot_activation_map(dataset = "WMFS", 

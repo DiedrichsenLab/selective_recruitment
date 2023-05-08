@@ -32,8 +32,10 @@ def plot_activation_map(dataset = "WMFS",
                          atlas_space = "SUIT3", 
                          contrast_name = "average", 
                          render = "plotly", 
+                         view = "lateral", 
                          cmap = "coolwarm",
                          cscale = [-0.2, 0.2], 
+                         colorbar = True, 
                          smooth = None):
     """
     """
@@ -62,12 +64,15 @@ def plot_activation_map(dataset = "WMFS",
         # convert vol 2 surf
         img_nii = atlas.data_to_nifti(dat_con)
         # convert to flatmap
-        img_flat = flatmap.vol_to_surf([img_nii], stats='nanmean', space = 'SUIT', ignore_zeros=True)
+        img_flat = flatmap.vol_to_surf([img_nii], 
+                                        stats='nanmean', 
+                                        space = 'SUIT', 
+                                        ignore_zeros=True)
         ax = flatmap.plot(data=img_flat, 
                           render=render, 
                           hover='auto', 
                           cmap = cmap, 
-                          colorbar = True, 
+                          colorbar = colorbar, 
                           bordersize = 1, 
                           cscale = cscale)
 
@@ -84,8 +89,8 @@ def plot_activation_map(dataset = "WMFS",
             fig = plotting.plot_surf_stat_map(
                                             surfs[h], img_con[h], hemi=hemi,
                                             # title='Surface left hemisphere',
-                                            colorbar=True, 
-                                            view = 'lateral',
+                                            colorbar=colorbar, 
+                                            view = view,
                                             cmap=cmap,
                                             engine='plotly',
                                             symmetric_cbar = True,
@@ -201,8 +206,10 @@ def plot_connectivity_weight(roi_name = "D2R",
                              cerebellum_roi = "NettekovenSym68c32",
                              cerebellum_atlas = "SUIT3",
                              log_alpha = 8,
+                             view = "lateral", 
                              dataset_name = "MDTB",
                              cmap = "coolwarm",
+                             colorbar = True, 
                              ses_id = "ses-s1"):
     """
     """
@@ -234,8 +241,8 @@ def plot_connectivity_weight(roi_name = "D2R",
         fig = plotting.plot_surf_stat_map(
                                         surfs[h], weight_roi_list[h], hemi=hemi,
                                         # title='Surface left hemisphere',
-                                        colorbar=True, 
-                                        view = 'lateral',
+                                        colorbar=colorbar, 
+                                        view = view,
                                         cmap=cmap,
                                         engine='plotly',
                                         symmetric_cbar = True,

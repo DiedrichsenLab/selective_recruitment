@@ -82,12 +82,12 @@ def calc_ttest_mean(res,c):
         T = cmean/std*np.sqrt(N)
     return cmean,T
 
-def plot_data_flat(data,atlas_cereb):
+def plot_data_flat(data,atlas_cereb,**kwargs):
     """plots the data on the flatmap
     """
     X = atlas_cereb.data_to_nifti(data)
     sdata = suit.flatmap.vol_to_surf(X)
-    fig = suit.flatmap.plot(sdata,render='plotly')
+    fig = suit.flatmap.plot(sdata,render='plotly',**kwargs)
     fig.show()
 
 def check_roi_wise():

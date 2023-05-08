@@ -85,6 +85,7 @@ def get_summary_conn(dataset = "WMFS",
                      conn_dataset = "MDTB",
                      conn_method = "L2Regression", 
                      log_alpha = 8, 
+                     crossed = True, 
                      conn_ses_id = "ses-s1"):
 
     """
@@ -101,8 +102,8 @@ def get_summary_conn(dataset = "WMFS",
     # load the model averaged over subjects
     fname = conn_dir + f"/{conn_dataset}_{conn_ses_id}_{cortex_roi}_{conn_method}_A{log_alpha}_avg.h5"
     model = dd.io.load(fname) 
-    weights = model.coef_
-    scale = model.scale_ 
+    # weights = model.coef_
+    # scale = model.scale_ 
 
     # prepare the cortical data 
     # NOTE: to use connectivity weights estimated in MDTB you always need to pass a tesselation
@@ -114,8 +115,10 @@ def get_summary_conn(dataset = "WMFS",
 
     # use cortical data to predict cerebellar data (voxel-wise)
     atlas_cereb, _ = am.get_atlas("SUIT3",gl.atlas_dir)
-    Yhat = ra.predict_cerebellum(weights, scale, X_parcel, atlas_cereb, info, fwhm = 0)
-
+    # Yhat = ra.predict_cerebellum(weights, scale, X_parcel, atlas_cereb, info, fwhm = 0)
+    if crossed:
+        X_parcel = np.concatenate([X_parcel[:, info.half == 2, :], X_parcel[:, info.half == 1, :]], axis=1)
+    Yhat = model.predict(X_parcel)
     # get the cerebellar data
     # NOTE: if None is passed, then it will average over the whole cerebellum
     if cerebellum_roi is not None:
@@ -161,13 +164,12 @@ def get_summary_conn(dataset = "WMFS",
 
 
 if __name__ == "__main__":
-    D = get_summary_data(dataset = "WMFS", 
-                        ses_id = 'ses-02', 
-                        atlas_space = "fs32k",
-                        atlas_roi = "glasser",
-                        type = "CondHalf", 
-                        unite_struct = False,
-                        add_rest = True)
+    D = get_summary_conn(dataset="WMFS",
+                        ses_id='ses-02',
+                        type="CondHalf",
+                        cerebellum_roi='NettekovenSym68c32integLR',
+                        cortex_roi="Icosahedron1002",
+                        add_rest=True)
     pass
 
 

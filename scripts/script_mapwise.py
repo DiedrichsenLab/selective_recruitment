@@ -38,8 +38,24 @@ def load_data(ses_id = 'ses-02',
                 mname = "MDTB_ses-s1_Icosahedron1002_L2Regression",
                 reg = "A8",
                 add_rest = False):
+    """_summary_
+
+    Args:
+        ses_id (str): _description_. Defaults to 'ses-02'.
+        subj (array or str or None): Subjects. None = all 
+        atlas_space (str): cerebellar atlas space. Defaults to 'SUIT3'.
+        cortex (str, optional):cortical parcellation Defaults to 'Icosahedron1002'.
+        type (str): Data Type. Defaults to "CondAll".
+        mname (str): connectivity model name Defaults to "MDTB_ses-s1_Icosahedron1002_L2Regression".
+        reg (str): Regularization string. Defaults to "A8".
+        add_rest (bool): Add rest to data? Defaults to False.
+    Returns:
+        Y: cerebellar data
+        YP: predicted cerebellar data
+        atlas: cortical atlas
+        info: dataframe with info for data  
+    Returns:
     """
-    """    
     Y,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
                                     atlas=atlas_space,
                                     sess=ses_id,

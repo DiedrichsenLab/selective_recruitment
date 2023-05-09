@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-The functions used to do selective recruitment analysis
+The common functions used to do selective recruitment analysis
 
-Created on 12/09/2022 at 5:25 PM
-Author: Ladan Shahshahani
+Author: Ladan Shahshahani, Joern Diedrichsen
 """
 # import packages
 import numpy as np

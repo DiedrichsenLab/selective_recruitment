@@ -20,7 +20,7 @@ import Functional_Fusion.dataset as fdata
 import Functional_Fusion.util as futil
 import Functional_Fusion.matrix as fmatrix
 import selective_recruitment.globals as gl
-import selective_recruitment.recruite_ana as ra
+import regress as ra
 import selective_recruitment.rsa as srsa
 import cortico_cereb_connectivity.evaluation as ccev
 import Correlation_estimation.util as corr_util

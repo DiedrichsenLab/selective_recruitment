@@ -21,7 +21,7 @@ sys.path.append('..')
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
 import selective_recruitment.globals as gl
-import selective_recruitment.recruite_ana as ra
+import regress as ra
 
 #
 import os

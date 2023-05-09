@@ -23,7 +23,7 @@ from SUITPy import flatmap
 import PcmPy as pcm
 
 import selective_recruitment.plotting as plotting
-import selective_recruitment.recruite_ana as ra
+import regress as ra
 import selective_recruitment.globals as gl
 import selective_recruitment.scripts.script_prep_sc as ss
 

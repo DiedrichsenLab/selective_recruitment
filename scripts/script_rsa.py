@@ -22,7 +22,7 @@ import Functional_Fusion.dataset as ds
 import matplotlib.pyplot as plt
 
 import selective_recruitment.rsa as srsa
-import selective_recruitment.recruite_ana as sr
+import regress as sr
 import selective_recruitment.globals as gl
 
 import rsatoolbox as rsa

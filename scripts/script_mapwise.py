@@ -14,7 +14,7 @@ import Functional_Fusion.dataset as ds
 import Functional_Fusion.util as futil
 import Functional_Fusion.matrix as fmatrix
 import selective_recruitment.globals as gl
-import selective_recruitment.recruite_ana as ra
+import regress as ra
 import cortico_cereb_connectivity.globals as ccc_gl
 import PcmPy as pcm
 import SUITPy as suit
@@ -30,60 +30,6 @@ import scipy.stats as ss
 
 import warnings
 
-def load_data(ses_id = 'ses-02',
-                subj = None,
-                atlas_space='SUIT3',
-                cortex = 'Icosahedron1002',
-                type = "CondAll",
-                mname = "MDTB_ses-s1_Icosahedron1002_L2Regression",
-                reg = "A8",
-                add_rest = False):
-    """_summary_
-
-    Args:
-        ses_id (str): _description_. Defaults to 'ses-02'.
-        subj (array or str or None): Subjects. None = all 
-        atlas_space (str): cerebellar atlas space. Defaults to 'SUIT3'.
-        cortex (str, optional):cortical parcellation Defaults to 'Icosahedron1002'.
-        type (str): Data Type. Defaults to "CondAll".
-        mname (str): connectivity model name Defaults to "MDTB_ses-s1_Icosahedron1002_L2Regression".
-        reg (str): Regularization string. Defaults to "A8".
-        add_rest (bool): Add rest to data? Defaults to False.
-    Returns:
-        Y: cerebellar data
-        YP: predicted cerebellar data
-        atlas: cortical atlas
-        info: dataframe with info for data  
-    Returns:
-    """
-    Y,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                    atlas=atlas_space,
-                                    sess=ses_id,
-                                    subj=subj,
-                                    type = type)
-    X,info,dset = ds.get_dataset(gl.base_dir,'WMFS',
-                                    atlas="fs32k",
-                                    sess=ses_id,
-                                    subj=subj,
-                                    type = type)
-    model_path = os.path.join(ccc_gl.conn_dir,atlas_space,'train',mname)
-    fname = model_path + f"/{mname}_{reg}_avg.h5"
-    json_name = model_path + f"/{mname}_{reg}_avg.json"
-    conn_model = dd.io.load(fname)
-
-    atlas,ainf = am.get_atlas('fs32k',gl.atlas_dir)
-    label=[gl.atlas_dir+'/tpl-fs32k/'+cortex+'.L.label.gii',
-           gl.atlas_dir+'/tpl-fs32k/'+cortex+'.R.label.gii']
-    atlas.get_parcel(label,unite_struct=False)
-    X, parcel_labels = ds.agg_parcels(X , 
-                                         atlas.label_vector, 
-                                         fcn=np.nanmean)
-    YP = conn_model.predict(X)
-    if add_rest:
-        Y,_ = ra.add_rest_to_data(Y,info)
-        YP,info = ra.add_rest_to_data(YP,info)
-
-    return Y,YP,atlas,info
 
 def calc_ttest_mean(res,c):
     """calculates the mean and t-test for a specific residual contrast

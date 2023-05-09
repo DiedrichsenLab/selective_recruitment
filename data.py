@@ -27,7 +27,7 @@ def add_rest_to_data(X,info):
 
     Returns:
         X (ndarray): n_subj,n_cond+1,n_reg data matrix  
-        info (DataFrame): Dataframe with information 
+        info_new (DataFrame): Dataframe with information 
     """
     n_subj,n_cond,n_reg = X.shape
     X_new = np.zeros((n_subj,n_cond+1,n_reg))
@@ -116,7 +116,7 @@ def get_voxdata_obs_pred(dataset = "WMFS",
     
     return Y,YP,atlas,info
 
-def get_summary_data(tensor, 
+def get_summary_roi(tensor, 
                      atlas_space = "fs32k",
                      atlas_roi = "glasser",
                      unite_struct = False,

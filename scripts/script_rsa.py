@@ -17,14 +17,15 @@ import nitools as nt
 import PcmPy as pcm
 import seaborn as sb
 
-# modules from functional fusion
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.dataset as ds
 import matplotlib.pyplot as plt
-# modules from connectivity
-import cortico_cereb_connectivity.prepare_data as cprep
-import selective_recruitment.rsa as rsa
-import selective_recruitment.recruite_ana as sr
+
+import selective_recruitment.rsa as srsa
+import regress as sr
+import selective_recruitment.globals as gl
+
+import rsatoolbox as rsa
 
 
 base_dir = '/Volumes/diedrichsen_data$/data/FunctionalFusion'
@@ -87,7 +88,112 @@ def individual_analysis():
     pass 
 
 
+def cereb_parcel_rsa(label = "NettekovenSym68c32", 
+                     atlas_space = "SUIT3", 
+                     subj = None,
+                     type = "CondRun", 
+                     label_name = "D3R", 
+                     reorder = ["phase", "recall"]
+                     ):
+
+    tensor, info, dataset = ds.get_dataset(gl.base_dir,
+                                           subj = subj,
+                                           dataset = 'WMFS',
+                                           atlas=atlas_space,
+                                           sess='ses-02',
+                                           type=type)
+
+    # create atlas object to use when getting labels
+    atlas, ainfo = am.get_atlas(atlas_dir=gl.atlas_dir, atlas_str=atlas_space)
+
+    # get the label file
+    label_file = f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii"
+
+    # read label lookup table
+    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
+
+    # get the index for the selected label
+    ## the first label is 0, discarding it ...
+    i = label_names[1:].index(label_name)
+    # get parcels 
+    label_vector, labels = atlas.get_parcel(label_file)
+
+    # create a mask for the voxels within the selected label
+    label_mask = label_vector == i
+
+    # loop over subject and do rsa within the selected region
+    n_subj = tensor.shape[0]
+
+    data_region = tensor[:, :, label_mask]
+
+    G1,Ginf = srsa.calc_rsa(data_region,info,partition='run',center=False,reorder=reorder)
+    return G1, Ginf
+
+def cereb_parcel_rdm(label = "NettekovenSym68c32", 
+                     atlas_space = "SUIT3", 
+                     subj = None,
+                     type = "CondRun", 
+                     label_name = "D3R", 
+                     reorder = ["phase", "recall"]
+                     ):
+
+    tensor, info, dataset = ds.get_dataset(gl.base_dir,
+                                           subj = subj,
+                                           dataset = 'WMFS',
+                                           atlas=atlas_space,
+                                           sess='ses-02',
+                                           type=type)
+
+    # create atlas object to use when getting labels
+    atlas, ainfo = am.get_atlas(atlas_dir=gl.atlas_dir, atlas_str=atlas_space)
+
+    # get the label file
+    label_file = f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii"
+
+    # read label lookup table
+    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
+
+    # get the index for the selected label
+    ## the first label is 0, discarding it ...
+    i = label_names[1:].index(label_name)
+    # get parcels 
+    label_vector, labels = atlas.get_parcel(label_file)
+
+    # create a mask for the voxels within the selected label
+    label_mask = label_vector == i
+
+    # loop over subject and do rsa within the selected region
+    n_subj = tensor.shape[0]
+
+    data_region = tensor[:, :, label_mask]
+
+    # make rsa dataset objects
+    data_rsa = []
+    for s in range(n_subj):
+        # now create a  dataset object
+        des = {'subj': s}
+        obs_des = {'conds': info.cond_name.values, 'runs': info["run"].values}
+        chn_des = {'voxels': np.array(['voxel_' + str(x) for x in np.arange(data_region.shape[2])])}
+        
+        # replace nans with 0s
+        data_reg_tmp = np.nan_to_num(data_region[s, :, :])
+        
+        data_tmp = rsa.data.Dataset(measurements=data_reg_tmp,
+                                    descriptors=des,
+                                    obs_descriptors=obs_des,
+                                    channel_descriptors=chn_des)
+
+        data_rsa.append(data_tmp)
+    # calculate crossvalidated distance for the region
+    rdm_cv = rsa.rdm.calc_rdm(data_rsa, method='crossnobis', descriptor='conds', cv_descriptor='runs')
+    return rdm_cv
 
 if __name__=='__main__':
-    individual_analysis()
-    # cereb_cortical_rsa()
+    a = cereb_parcel_rdm(label = "NettekovenSym68c32", 
+                     atlas_space = "SUIT3", 
+                     subj = None,
+                     type = "CondRun", 
+                     label_name = "D3R"
+                     )
+
+    print("hello")

@@ -12,6 +12,7 @@ import pandas as pd
 
 import Functional_Fusion.dataset as ds
 import Functional_Fusion.atlas_map as am
+import Functional_Fusion.matrix as matrix
 
 import cortico_cereb_connectivity.globals as ccc_gl
 
@@ -105,20 +106,21 @@ def get_voxdata_obs_pred(dataset = "WMFS",
         if type == "CondHalf":
             X_parcel = np.concatenate([X[:, info.half == 2, :], X[:, info.half == 1, :]], axis=1)
         else:
+            print("CondAll is chosen so no crossing!")
             # leaves X_parcel unchanged
             pass
 
     # use cortical data and the model to get the cerebellar predicted data
     YP = conn_model.predict(X)
     if add_rest:
-        Y,_ = ra.add_rest_to_data(Y,info)
-        YP,info = ra.add_rest_to_data(YP,info)
+        Y,_ = add_rest_to_data(Y,info)
+        YP,info = add_rest_to_data(YP,info)
     
-    return Y,YP,atlas,info
+    return Y, YP, atlas, info
 
-def get_summary_roi(tensor, 
-                     atlas_space = "fs32k",
-                     atlas_roi = "glasser",
+def get_summary_roi(tensor, info, 
+                     atlas_space = "SUIT3",
+                     atlas_roi = "NettekovenSym68c32", 
                      unite_struct = False,
                      add_rest = True, 
                      var = "Y"):
@@ -126,8 +128,9 @@ def get_summary_roi(tensor,
 
     Args:
         tensor (np.ndarray): n_subj,n_cond,n_vox data matrix
-        atlas_space (str, optional): _description_. Defaults to "fs32k".
-        atlas_roi (str, optional): _description_. Defaults to "glasser".
+        info (pd.DataFrame): dataframe containing task info
+        atlas_space (str, optional): _description_. Defaults to "SUIT3".
+        atlas_roi (str, optional): _description_. Defaults to "NettekovenSym68c32".
         type (str, optional): _description_. Defaults to "CondHalf".
         unite_struct (bool, optional): _description_. Defaults to False.
         add_rest (bool, optional): _description_. Defaults to True.
@@ -145,17 +148,17 @@ def get_summary_roi(tensor,
             labels.append(atlas_dir + f'/{atlas_roi}.{hemi}.label.gii')
     else:
         atlas_dir = f'{gl.atlas_dir}/tpl-SUIT'
-        labels = f'{atlas_dir}/{atlas_roi}_dseg.nii'
+        labels = f'{atlas_dir}/atl-{atlas_roi}_space-SUIT_dseg.nii'
         
     # use lookuptable to get the names of the regions if lut file exists
-    if os.exists(f"{atlas_dir}/{atlas_roi}.lut"):
+    if os.path.exists(f"{atlas_dir}/atl-{atlas_roi}.lut"):
         region_info = sroi.get_label_names(atlas_roi, atlas_space= atlas_space)
     else: # if lut file doesn't exist, just use the parcel labels
         region_info = [f"parcel_{i}" for i in parcel_labels]
         
     # get average data per parcel
-    # get atlas
-    atlas, ainfo = am.get_atlas(atlas,gl.atlas_dir)
+    ## first get atlas object
+    atlas, ainfo = am.get_atlas(atlas_space,gl.atlas_dir)
 
     # NOTE: atlas.get_parcel takes in path to the label file, not an array
     if (isinstance(atlas, am.AtlasSurface)) | (isinstance(atlas, am.AtlasSurfaceSymmetric)):
@@ -175,22 +178,30 @@ def get_summary_roi(tensor,
                                                 atlas.label_vector, 
                                                 fcn=np.nanmean)
 
-    # add rest condition for control?
+    # add rest condition for control? if it's not already in the info
     if add_rest:
-        parcel_data,info = ra.add_rest_to_data(parcel_data,info)
+        if "rest" not in info.cond_name.values:
+            parcel_data,info = add_rest_to_data(parcel_data,info)
+
+    # aggregate data to get one value per condition (calc mean over runs/half/etc)
+    parcel_data = np.nan_to_num(parcel_data,copy=False)
+    Z = matrix.indicator(info.reg_id, positive=False)
+    parcel_data_agg = np.linalg.pinv(Z) @ parcel_data
+    ## get new info
+    info_new, _ = ds.agg_data(info, by = ["reg_id"], over = [], subset=None)
 
     # Transform into a dataframe
-    n_subj, n_cond, n_roi = parcel_data.shape
+    n_subj, n_cond, n_roi = parcel_data_agg.shape
 
     summary_list = [] 
     for i in range(n_subj):
         for r in range(n_roi):
-            info_sub = info.copy()
+            info_sub = info_new.copy()
             vec = np.ones((len(info_sub),))
             info_sub["sn"]    = i * vec
             info_sub["roi"]   = parcel_labels[r] * vec
             info_sub["roi_name"] = region_info[r+1]
-            info_sub[var]     = parcel_data[i,:,r]
+            info_sub[var]     = parcel_data_agg[i,:,r]
 
             summary_list.append(info_sub)
         
@@ -202,7 +213,7 @@ def get_summary_conn(dataset = "WMFS",
                      ses_id = 'ses-02',
                      subj = None, 
                      atlas_space = "SUIT3", 
-                     cerebellum_roi = "Verbal2Back", 
+                     cerebellum_roi = "NettekovenSym68c32", 
                      cortex_roi = "Icosahedron1002",
                      type = "CondHalf", 
                      add_rest = True,
@@ -215,46 +226,50 @@ def get_summary_conn(dataset = "WMFS",
     It's written similar to get_symmary from recruite_ana code
     """
     
-    Y,Yhat, _, _ = get_voxdata_obs_pred(dataset = dataset, 
-                                            ses_id = ses_id,
-                                            subj = subj,
-                                            atlas_space=atlas_space,
-                                            cortex = cortex_roi,
-                                            type = type,
-                                            mname_base = mname_base,
-                                            mmethod = mmethod,
-                                            add_rest = add_rest, 
-                                            crossed = crossed)
+    # get observed and predicted data for each cerebellar voxel
+    Y, Yhat, atlas, info = get_voxdata_obs_pred(dataset = dataset, 
+                                                ses_id = ses_id,
+                                                subj = subj,
+                                                atlas_space=atlas_space,
+                                                cortex = cortex_roi,
+                                                type = type,
+                                                mname_base = mname_base,
+                                                mmethod = mmethod,
+                                                add_rest = add_rest, 
+                                                crossed = crossed)
     
     # get the observed data averaged over region
-    obs_df = get_summary_data(Y, 
+    obs_df = get_summary_roi(Y, info=info, 
                               atlas_space = atlas_space,
                               atlas_roi = cerebellum_roi,
                               unite_struct = False,
                               add_rest = add_rest, 
                               var = "Y")
     
-    pred_df = get_summary_data(Yhat, 
+    pred_df = get_summary_roi(Yhat, info=info, 
                               atlas_space = atlas_space,
                               atlas_roi = cerebellum_roi,
                               unite_struct = False,
                               add_rest = add_rest, 
                               var = "X")
+                              
     # merge the dataframes, ignoring common columns (columns including task/region info)
     summary_df = pd.merge(left=obs_df, right=pred_df, how='inner')
     return summary_df
 
 
 if __name__ == "__main__":
-    # test cases for debugging
-    y, yp, atlas, info = get_voxdata_obs_pred(dataset = "WMFS", 
-                                                ses_id = 'ses-02',
-                                                subj = None,
-                                                atlas_space='SUIT3',
-                                                cortex = 'Icosahedron1002',
-                                                type = "CondAll",
-                                                mname_base = "MDTB_ses-s1",
-                                                mmethod = "L2Regression_A8",
-                                                add_rest = False, 
-                                                crossed = True)
+
+
+    D = get_summary_conn(dataset = "WMFS", 
+                     ses_id = 'ses-02',
+                     subj = None, 
+                     atlas_space = "SUIT3", 
+                     cerebellum_roi = "NettekovenSym68c32", 
+                     cortex_roi = "Icosahedron1002",
+                     type = "CondHalf", 
+                     add_rest = True,
+                     mname_base = "MDTB_ses-s1",
+                     mmethod = "L2Regression_A8", 
+                     crossed = True)
     pass

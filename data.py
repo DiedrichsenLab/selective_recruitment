@@ -187,23 +187,23 @@ def get_summary_roi(tensor, info,
 
     # aggregate data to get one value per condition (calc mean over runs/half/etc)
     parcel_data = np.nan_to_num(parcel_data,copy=False)
-    Z = matrix.indicator(info.reg_id, positive=False)
-    parcel_data_agg = np.linalg.pinv(Z) @ parcel_data
+    # Z = matrix.indicator(info.reg_id, positive=False)
+    # parcel_data_agg = np.linalg.pinv(Z) @ parcel_data
     ## get new info
-    info_new, _ = ds.agg_data(info, by = ["reg_id"], over = [], subset=None)
+    # info_new, _ = ds.agg_data(info, by = ["reg_id"], over = [], subset=None)
 
     # Transform into a dataframe
-    n_subj, n_cond, n_roi = parcel_data_agg.shape
+    n_subj, n_cond, n_roi = parcel_data.shape
 
     summary_list = [] 
     for i in range(n_subj):
         for r in range(n_roi):
-            info_sub = info_new.copy()
+            info_sub = info.copy()
             vec = np.ones((len(info_sub),))
             info_sub["sn"]    = i * vec
             info_sub["roi"]   = parcel_labels[r] * vec
             info_sub["roi_name"] = region_info[r+1]
-            info_sub[var]     = parcel_data_agg[i,:,r]
+            info_sub[var]     = parcel_data[i,:,r]
 
             summary_list.append(info_sub)
         

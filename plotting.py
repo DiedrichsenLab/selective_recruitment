@@ -21,40 +21,11 @@ from statsmodels.stats.anova import AnovaRM # perform F test
 import selective_recruitment.globals as gl
 import selective_recruitment.region as sroi
 
-import Functional_Fusion.dataset as fdata
+import Functional_Fusion.dataset as ds
 import Functional_Fusion.atlas_map as am
 
 import cortico_cereb_connectivity.scripts.script_plot_weights as wplot
 
-
-
-def prep_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
-    """
-    prepare the region dataframe to do the scatter plot
-    gets the mean across subjects (data point) and std of residuals
-    THIS ONLY WORKS FOR WM dataset
-    Args:
-        dataframe (pd.DataFrame) - dataframe with residuals info
-        agg_kw (dict) - dictionary determining info for dataframe aggregation
-        Example agg_kw: {'load': 'first',
-                         'phase': 'first',
-                         'recall': 'first',
-                         'X': np.mean,
-                         'Y': np.mean}
-    Returns:
-    g_df (pd.DataFrame) - dataframe ready for putting into the scatterplot function
-    """
-    # group by condition
-    grouped = dataframe.groupby([groupby])
-    g_df = grouped.agg(agg_kw)
-
-    g_std = grouped.std(numeric_only=True)
-    g_df["Y_CI"] = grouped.Y.apply(sps.sem) * 1.96
-    g_df["X_CI"] = grouped.X.apply(sps.sem)*1.96
-    g_df['err'] = g_std[error]
-
-
-    return g_df
 
 def annotate(dataframe, x = "X", y = "Y", labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
     """
@@ -82,47 +53,6 @@ def annotate(dataframe, x = "X", y = "Y", labels = 'cond_num', text_size = 'smal
         texts.append(text)
 
     adjust_text(texts) # make sure you have installed adjust_text
-
-def make_scatterplot_depricated(dataframe, x = "X", y = "Y", hue = "phase", style = "recall", label = "load", height = 4, aspect = 1):
-    """
-    make scatterplot
-    uses FacetGrid
-    Args:
-    dataframe (pd.DataFrame) - output from prep_df
-    hue (str)      - column name to be used to determine color
-    style (str)    - column name to be used to determine shape of the marker
-    label (str)    - column name to be used to determine the label of the data points
-    height (int)   - int to determine the height of the plot
-    aspect (float) - floating number to determine the aspect ratio of the plot
-    """
-    g = sns.FacetGrid(dataframe,  height=height, aspect=aspect)
-    # do the scatter plot
-    g.map_dataframe(sns.scatterplot, x="X", y="Y",
-                                    style = style, hue = hue, s = 100)
-    g.add_legend()
-
-    # fit the regression on top of the scatterplot
-    g.map_dataframe(sns.regplot, x="X", y="Y",
-                        fit_reg=True,
-                        scatter_kws={"s": 0}, # size is set to 0 so that it doesn't cover the markers created in the scatterplot step
-                        line_kws={'label':"Linear Reg", "color": 'grey'})
-
-    # put the errorbars in
-    g.map(plt.errorbar, x = dataframe['X'],
-                        y = dataframe['Y'],
-                        yerr = dataframe['err'],
-                        elinewidth=1,
-                        fmt='none', # no marker will be used when plotting the error bars
-                        color='grey',
-                        ecolor='0.9'
-                )
-    # set labels
-    g.set_xlabels('Cortical Activation (a.u.)')
-    g.set_ylabels('Cerebellar Activation (a.u.)')
-
-    # get labels for each data point
-    annotate(dataframe, text_size = 'small', text_weight = 'regular', labels = label)
-    return
 
 def make_scatterplot(dataframe, x = "X", y = "Y", split='cond_num', fit_line = True, labels=None,
         colors=None,markers=None):
@@ -179,134 +109,234 @@ def make_scatterplot(dataframe, x = "X", y = "Y", split='cond_num', fit_line = T
             labels = df[split].map(labels))
     return
 
-def plot_cerebellum_activation(dataset, ses_id, subject, contrast_name):
-    """_summary_
 
-    Args:
-        subject (_type_): _description_
-        contrast_name (_type_): _description_
-
-    Returns:
-        _type_: _description_
+def plot_activation_map(dataset = "WMFS", 
+                         ses_id = "ses-02", 
+                         subj = "group",
+                         type = "CondAll", 
+                         atlas_space = "SUIT3", 
+                         contrast_name = "average", 
+                         render = "plotly", 
+                         view = "lateral", 
+                         cmap = "coolwarm",
+                         cscale = [-0.2, 0.2], 
+                         colorbar = True, 
+                         smooth = None):
     """
+    """
+    # get dataset
+    data,info,dset = ds.get_dataset(gl.base_dir,
+                                    dataset = dataset,
+                                    atlas=atlas_space,
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type,  
+                                    smooth = smooth)
 
-    # create an instance of WMFS class
-    Dataset = fdata.get_dataset_class(gl.base_dir, dataset= dataset)
-    # get info
-    info = Dataset.get_info(ses_id,"CondAll")
+    # get the contrast of interest
+    if contrast_name == "average":
+        # make up a numpy array with all 1s as we want to average all the conditions
+        idx = np.ones([len(info.index), ], dtype = bool)
+    else:
+        idx = (info.names == contrast_name).values
 
-    # get participants
-    subjects = list(Dataset.get_participants().participant_id.values)
-    subjects.append("group")
+    # get the data for the contrast of interest
+    dat_con = np.nanmean(data[0, idx, :], axis = 0)
 
-    path_to_cifti = Dataset.data_dir.format(subject) + f'/{subject}_space-SUIT3_{ses_id}_CondAll.dscalar.nii'
-    cifti_img = nb.load(path_to_cifti)
+    # prepare data for plotting
+    atlas, ainfo = am.get_atlas(atlas_space, gl.atlas_dir)
+    if atlas_space == "SUIT3":
+        # convert vol 2 surf
+        img_nii = atlas.data_to_nifti(dat_con)
+        # convert to flatmap
+        img_flat = flatmap.vol_to_surf([img_nii], 
+                                        stats='nanmean', 
+                                        space = 'SUIT', 
+                                        ignore_zeros=True)
+        ax = flatmap.plot(data=img_flat, 
+                          render=render, 
+                          hover='auto', 
+                          cmap = cmap, 
+                          colorbar = colorbar, 
+                          bordersize = 1, 
+                          cscale = cscale)
 
-    # get the numpy array
-    img = cifti_img.get_fdata()
-    # get info for the contrast
-    info_con = info.loc[info.names == contrast_name]
-    idx = info_con.reg_id.values[0]
+    elif atlas_space == "fs32k":
+        # get inflated cortical surfaces
+        surfs = [gl.atlas_dir + f'/tpl-fs32k/tpl_fs32k_hemi-{h}_inflated.surf.gii' for i, h in enumerate(['L', 'R'])]
 
-    # get the numpy array corresponding to the contrast
-    img_con = img[idx-1, :].reshape(-1, 1)
+        # first convert to cifti
+        img_cii = atlas.data_to_cifti(dat_con.reshape(-1, 1).T)
+        img_con = nt.surf_from_cifti(img_cii)
+        
+        ax = []
+        for h,hemi in enumerate(['left', 'right']):
+            fig = plotting.plot_surf_stat_map(
+                                            surfs[h], img_con[h], hemi=hemi,
+                                            # title='Surface left hemisphere',
+                                            colorbar=colorbar, 
+                                            view = view,
+                                            cmap=cmap,
+                                            engine='plotly',
+                                            symmetric_cbar = True,
+                                            vmax = cscale[1]
+                                        )
 
-    # convert vol 2 surf
-    atlas_cereb, ainfo = am.get_atlas('SUIT3',gl.atlas_dir)
-    img_nii = atlas_cereb.data_to_nifti(img_con.T)
-    img_flat = flatmap.vol_to_surf([img_nii], stats='nanmean', space = 'SUIT')
-
-    # plot
-    ax = flatmap.plot(data=img_flat, render="plotly", cmap = "coolwarm", colorbar = True, bordersize = 1.5, cscale=[-0.2, 0.2])
-    # ax.show()
+            ax.append(fig.figure)
     return ax
 
-def plot_cortex_activation(dataset, ses_id, subject, contrast_name):
-    """_summary_
+def plot_mapwise_recruitment(data, 
+                            atlas_space = "SUIT3",  
+                            render = "plotly", 
+                            cmap = "hsv", 
+                            cscale = [-5, 5], 
+                            threshold = None):
+    """
+    plots results of the map-wise selective recruitment on the flatmap
+    """
+    if threshold is not None:
+        # set values outside threshold to nan
+        data[np.abs(data)>threshold] = np.nan
 
+    atlas,ainf = am.get_atlas(atlas_space, gl.atlas_dir)
+    X = atlas.data_to_nifti(data)
+    sdata = flatmap.vol_to_surf(X)
+    fig = flatmap.plot(sdata, render=render, colorbar = True, cmap = cmap, cscale = cscale, bordersize = 1.5)
+    return fig
+
+def plot_parcels_super(label = "NettekovenSym68c32", 
+                       roi_super = "D", 
+                       render = "plotly"):
+    """
+    Plots the selected super region based on the parcellation defined by "parcellation"
     Args:
-        subjcet (_type_): _description_
-        contrast_name (_type_): _description_
+        parcellation (str) - name of the hierarchical parcellation 
+        roi_super (str) - name assigned to the roi in the hierarchical parcellation
+    Returns:
+        None
     """
-    # get surfaces
-    # surfs = [gl.atlas_dir + f"/tpl-fs32k/tpl_fs32k_hemi-{hemi}_inflated.surf.gii" ]
+    # get the roi numbers for the super roi
+    idx_label, colors2, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
+    
+    D_indx = [label_names.index(name) for name in label_names if roi_super in name]
+    D_name = [name for name in label_names if roi_super in name]
+    D_name.insert(0, '0')
 
-    # create an instance of WMFS class
-    Dataset = fdata.get_dataset_class(gl.base_dir, dataset= dataset)
-    # get info
-    info = Dataset.get_info(ses_id,"CondAll")
+    fname = gl.atlas_dir + f'/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii'
+    img = nb.load(fname)
+    dat = img.get_fdata()
+    
+    # map it from volume to surface
+    img_flat = flatmap.vol_to_surf([img], stats='mode', space = 'SUIT')
 
-    # get participants
-    subjects = list(Dataset.get_participants().participant_id.values)
-    subjects.append("group")
+    # get a mask for the selected super region
+    region_mask = np.isin(img_flat.astype(int), D_indx)
 
-    path_to_cifti = Dataset.data_dir.format(subject) + f'/{subject}_space-fs32k_{ses_id}_CondAll.dscalar.nii'
-    cifti_img = nb.load(path_to_cifti)
+    # convert non-selected labels to nan
+    roi_flat = img_flat.copy()
+    # convert non-selected labels to nan
+    roi_flat[np.logical_not(region_mask)] = np.nan
 
-    # get the hemispheres
-    cifti_list = nt.surf_from_cifti(cifti_img)
+    for i, r in enumerate(D_indx):
+        roi_flat[roi_flat == r] = i+1
+    
+    ax = flatmap.plot(roi_flat, render=render, bordersize = 1.5, 
+                      overlay_type='label',
+                      label_names=D_name, cmap = 'tab20b')
+    return ax
 
-    # get info for the contrast
-    info_con = info.loc[info.names == contrast_name]
-    idx = info_con.reg_id.values[0]
-    surf_hemi = []
-    fig_hemi = []
-    for h, hemi in enumerate(['L', 'R']):
-        img = cifti_list[h]
-        # get the numpy array corresponding to the contrast
-        img_con = img[idx-1, :].reshape(-1, 1)
-
-        surf_hemi.append(gl.atlas_dir + f"/tpl-fs32k/tpl_fs32k_hemi-{hemi}_inflated.surf.gii")
-
-        fig_hemi.append(plotting.view_surf(
-                                        surf_hemi[h], img_con, colorbar=True,
-                                        threshold=None, cmap="coolwarm" , vmax = 1
-                                        ))
-    return fig_hemi
-
-def roi_difference(df,
-             xvar = "cond_name",
-             hue = "roi_name",
-             depvar = "Y",
-             sub_roi = None,
-             roi = "D",
-             var = ["cond_name", "roi_name"]):
-    """ roi_difference plots and tests for differences between rois
+def plot_parcels_single(label = "NettekovenSym68c32", 
+                        roi_name = "D1R", 
+                        render = "plotly"):
     """
-    # get D regions alone?
-    names = df.roi_name.values.astype(str)
-    mask_roi = np.char.startswith(names, roi)
+    plot the selected region from parcellation on flatmap
+    Args:
+        parcellation (str) - name of the parcellation
+        roi_name (str) - name of the roi as stored in the lookup table
+    Return:
+        ax (axes object)
+        roi_num (int) - number corresponding to the region
+    """
+    fname = gl.atlas_dir + f'/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii'
+    img = nb.load(fname)
+    # map it from volume to surface
+    img_flat = flatmap.vol_to_surf([img], stats='mode', space = 'SUIT')
 
-    # add a new column determining side (hemisphere)
-    df["side"] = df["roi_name"].str[2]
+    # get the lookuptable for the parcellation
+    lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{label}.lut')
 
-    # add a column determining anterior posterior
-    mask_anteriors = np.char.endswith(names, "A")
-    df["AP"] = ""
-    df["AP"].loc[mask_anteriors] = "A"
-    df["AP"].loc[np.logical_not(mask_anteriors)] = "P"
+    # get the label info
+    label_info = lookuptable[2]
+    if '0' not in label_info:
+        # append a 0 to it
+        label_info.insert(0, '0')
+    cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
 
-    # add a new column that defines the index assigned to the region
-    # for D2 it will be 2, for D3 it will be 3
-    df["sub_roi_index"] = df["roi_name"].str[1]
+    # get the index for the region
+    roi_num = label_info.index(roi_name)
+    roi_flat = img_flat.copy()
+    # convert non-selected labels to nan
+    roi_flat[roi_flat != float(roi_num)] = np.nan
+    # plot the roi
+    ax = flatmap.plot(roi_flat, render=render,
+                      hover='auto', colorbar = False,
+                      bordersize = 1.5, overlay_type='label',
+                      label_names=label_info, cmap = cmap)
 
-    # add a new column determining side (hemisphere)
-    df["side"] = df["roi_name"].str[2]
+    return ax
 
-    # get Ds
-    DD_D = df.loc[(mask_roi)]
-    # get the specific region
-    if sub_roi is not None:
-        DD_D = DD_D.loc[DD_D.sub_roi_index == sub_roi]
+def plot_connectivity_weight(roi_name = "D2R",
+                             method = "L2Regression",
+                             cortex_roi = "Icosahedron1002",
+                             cerebellum_roi = "NettekovenSym68c32",
+                             cerebellum_atlas = "SUIT3",
+                             log_alpha = 8,
+                             view = "lateral", 
+                             dataset_name = "MDTB",
+                             cmap = "coolwarm",
+                             colorbar = True, 
+                             ses_id = "ses-s1"):
+    """
+    """
+    # get connectivity weight maps for the selected region
+    cifti_img = wplot.get_weight_map(method = method,
+                                    cortex_roi = cortex_roi,
+                                    cerebellum_roi = cerebellum_roi,
+                                    cerebellum_atlas = cerebellum_atlas,
+                                    log_alpha = log_alpha,
+                                    dataset_name = dataset_name,
+                                    ses_id = ses_id,
+                                    type = "dscalar"
+                                    )
 
-    # barplots
-    plt.figure()
-    ax = sns.lineplot(data=DD_D.loc[(df.cond_name != "rest")], x = xvar, y = depvar,
-                    errwidth=0.5, hue = hue)
-    plt.xticks(rotation = 90)
-    anov = AnovaRM(data=df, depvar=depvar,
-                  subject='sn', within=var, aggregate_func=np.mean).fit()
-    return anov
+    # get the cortical weight map corresponding to the current
+    ## get parcel axis from the cifti image
+    parcel_axis = cifti_img.header.get_axis(0)
+    ## get the name of the parcels in the parcel_axis
+    idx = list(parcel_axis.name).index(roi_name)
+    # get the maps for left and right hemi
+    weight_map_list = nt.surf_from_cifti(cifti_img)
+    # get the map for the selected region for left and right hemispheres
+    weight_roi_list = [weight_map_list[h][idx, :] for h in [0, 1]]
+
+    surfs = [gl.atlas_dir + f"/tpl-fs32k/tpl_fs32k_hemi-{hemi}_inflated.surf.gii" for hemi in ['L', 'R']]
+    ax = []
+    for h, hemi in enumerate(['left', 'right']):
+
+        fig = plotting.plot_surf_stat_map(
+                                        surfs[h], weight_roi_list[h], hemi=hemi,
+                                        # title='Surface left hemisphere',
+                                        colorbar=colorbar, 
+                                        view = view,
+                                        cmap=cmap,
+                                        engine='plotly',
+                                        symmetric_cbar = True,
+                                        vmax = np.nanmax(weight_roi_list[0]),
+                                    )
+        print(np.nanmax(weight_roi_list[0]))
+        ax.append(fig.figure)
+    return ax
+
 
 def calc_mds(X,center=True,K=2):
     """
@@ -324,7 +354,6 @@ def calc_mds(X,center=True,K=2):
     S = S[:K]
     V = V[:K,:] # V is already transposed
     return W*S,V
-
 
 def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
     ax = plt.gca()
@@ -382,7 +411,6 @@ def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 're
                 ax.text(v[0,i]*1.05,v[1,i]*1.05,v[2,i]*1.05,v_labels[i],horizontalalignment='center',verticalalignment='center')
     return
 
-
 def plot_mds3_new(x, y,z, 
                   vectors = None,
                   label = "NettekovenSym68c32", 
@@ -431,90 +459,16 @@ def plot_mds3_new(x, y,z,
     fig.show()
     return 
 
-def annotate_depricated(dataframe, xlabel, ylabel, labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
-    """
-    annotate data points in the scatterplot
-    Args:
-    dataframe (pd.DataFrame)
-    labels (str,series) - column of the dataframe that is to be used as label
-        or dict that maps the index of the dataframe to a label
-    text_size (str)
-    text_weight (str)
-    labels (str)
-    """
-    texts = []
-    if labels is str:
-        labels = dataframe[labels]
-    for i,d in dataframe.iterrows():
-        text = plt.text(
-                        d[xlabel]+0.001,
-                        d[ylabel],
-                        s = labels.loc[i],
-                        horizontalalignment='left',
-                        size=text_size,
-                        weight=text_weight
-                        )
-        texts.append(text)
-    adjust_text(texts) # make sure you have installed adjust_text
 
-
-def make_scatterplot_depricated2(dataframe, xlabel, ylabel, xerr, yerr,  split='cond_num', labels=None,
-        colors=None,markers=None):
-    """
-    make scatterplot
-    Args:
-    dataframe (pd.DataFrame) -
-            entire dataframe with individual subject data and fitted slopes and intercepts
-    split (str) - column name indicating the different conditions to be plotted
-    labels(dict)    - column name to be used to determine shape of the marker
-    label (str)    - column name to be used to determine the label of the data points
-    height (int)   - int to determine the height of the plot
-    aspect (float) - floating number to determine the aspect ratio of the plot
-    """
-    # do the scatter plot
-    grouped = dataframe.groupby([split])
-    agg_kw = {split:'first',
-              xlabel:np.mean,ylabel: np.mean}
-    df = grouped.agg(agg_kw)
-
-    df[f"{xlabel}_CI"] = grouped[xlabel].apply(sps.sem) * 1.96
-    df[f"{ylabel}_CI"] = grouped[ylabel].apply(sps.sem)*1.96
-
-    if xerr is not None:
-        df['xerr'] = grouped[xerr].apply(sps.sem)*1.96
-    else:
-        df['xerr'] = None
-    if yerr is not None:
-        df['yerr'] = grouped[yerr].apply(sps.sem)*1.96
-    else:
-        df['yerr'] = None
-
-    # add  the appropriate errorbars
-    plt.errorbar(x = df[xlabel],
-                 y = df[ylabel],
-                #  yerr = df['xerr'],
-                #  xerr = df['yerr'],
-                 elinewidth=2,
-                 fmt='none', # no marker will be used when plotting the error bars
-                 color=(0.3,0.3,0.3),
-                 ecolor=(0.5,0.5,0.5)
-                )
-
-    # # Plot average regression line
-    # xrange = np.array([df[xlabel].min(),df['X'].max()])
-    # ypred = xrange*df.slope.mean()+df.intercept.mean()
-    # plt.plot(xrange,ypred,'k-')
-
-    # Make scatterplot, determining the markers and colors from the dictionary
-    ax = sns.scatterplot(data=df, x=xlabel, y=ylabel, style = split, hue = split, s = 100,legend=None,markers=markers,palette=colors)
-
-    # set labels
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-
-    # get labels for each data point
-    annotate2(df, xlabel=xlabel, ylabel=ylabel,
-            text_size = 'small',
-            text_weight = 'regular',
-            labels = df[split].map(labels))
-    return
+if __name__ == "__main__":
+    plot_connectivity_weight(roi_name = "D2R",
+                             method = "L2Regression",
+                             cortex_roi = "Icosahedron1002",
+                             cerebellum_roi = "NettekovenSym68c32",
+                             cerebellum_atlas = "SUIT3",
+                             log_alpha = 8,
+                             view = "lateral", 
+                             dataset_name = "MDTB",
+                             cmap = "coolwarm",
+                             colorbar = True, 
+                             ses_id = "ses-s1")

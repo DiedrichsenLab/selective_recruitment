@@ -3,8 +3,7 @@
 """
 The functions used to make label files for the cortical and cerebellar rois
 
-Created on 07/03/2023
-Author: Ladan Shahshahani
+Author: Ladan Shahshahani, Joern Diedrichsen
 """
 # import packages
 import os
@@ -15,25 +14,22 @@ import nibabel as nb
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
-import pickle
-import generativeMRF
 
 from pathlib import Path
 from SUITPy import flatmap
 import PcmPy as pcm
 
 import selective_recruitment.plotting as plotting
-import regress as ra
+import selective_recruitment.regress as ra
 import selective_recruitment.globals as gl
-import selective_recruitment.scripts.script_prep_sc as ss
+import selective_recruitment.data as ss
 
 import Functional_Fusion.dataset as fdata
 import Functional_Fusion.atlas_map as am
+
 from statsmodels.stats.anova import AnovaRM  # perform F test
 # import warnings
 # warnings.filterwarnings('ignore')
-
-# TODO: roi differences between cortical rois using glasser/power etc parcellations
 
 
 wkdir = 'A:\data\Cerebellum\CerebellumWorkingMemory\selective_recruit'
@@ -64,6 +60,50 @@ color_dict = {1: 'b', 2: 'b',
               11: 'r', 12: 'r',
               13: 'g'}
 
+
+def roi_difference(df,
+             xvar = "cond_name",
+             hue = "roi_name",
+             depvar = "Y",
+             sub_roi = None,
+             roi = "D",
+             var = ["cond_name", "roi_name"]):
+    """ roi_difference plots and tests for differences between rois
+    """
+    # get D regions alone?
+    names = df.roi_name.values.astype(str)
+    mask_roi = np.char.startswith(names, roi)
+
+    # add a new column determining side (hemisphere)
+    df["side"] = df["roi_name"].str[2]
+
+    # add a column determining anterior posterior
+    mask_anteriors = np.char.endswith(names, "A")
+    df["AP"] = ""
+    df["AP"].loc[mask_anteriors] = "A"
+    df["AP"].loc[np.logical_not(mask_anteriors)] = "P"
+
+    # add a new column that defines the index assigned to the region
+    # for D2 it will be 2, for D3 it will be 3
+    df["sub_roi_index"] = df["roi_name"].str[1]
+
+    # add a new column determining side (hemisphere)
+    df["side"] = df["roi_name"].str[2]
+
+    # get Ds
+    DD_D = df.loc[(mask_roi)]
+    # get the specific region
+    if sub_roi is not None:
+        DD_D = DD_D.loc[DD_D.sub_roi_index == sub_roi]
+
+    # barplots
+    plt.figure()
+    ax = sns.lineplot(data=DD_D.loc[(df.cond_name != "rest")], x = xvar, y = depvar,
+                    errwidth=0.5, hue = hue)
+    plt.xticks(rotation = 90)
+    anov = AnovaRM(data=df, depvar=depvar,
+                  subject='sn', within=var, aggregate_func=np.mean).fit()
+    return anov
 
 def norm_within_category(df, category=['roi_name','sn'], value='Y', norm='zscore'):
     """

@@ -41,33 +41,6 @@ def add_rest_to_data(X,info):
     info_new = pd.concat([info,pd.DataFrame(a)],ignore_index=True)
     return X_new,info_new
 
-def prep_plotting_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
-    """
-    prepare the region dataframe to do the scatter plot
-    gets the mean across subjects (data point) and std of residuals
-    Args:
-        dataframe (pd.DataFrame) - dataframe with residuals info
-        agg_kw (dict) - dictionary determining info for dataframe aggregation
-        Example agg_kw: {'load': 'first',
-                         'phase': 'first',
-                         'recall': 'first',
-                         'X': np.mean,
-                         'Y': np.mean}
-    Returns:
-    g_df (pd.DataFrame) - dataframe ready for putting into the scatterplot function
-    """
-    # group by condition
-    grouped = dataframe.groupby([groupby])
-    g_df = grouped.agg(agg_kw)
-
-    g_std = grouped.std(numeric_only=True)
-    g_df["Y_CI"] = grouped.Y.apply(sps.sem) * 1.96
-    g_df["X_CI"] = grouped.X.apply(sps.sem)*1.96
-    g_df['err'] = g_std[error]
-
-
-    return g_df
-
 def get_voxdata_obs_pred(dataset = "WMFS", 
                          ses_id = 'ses-02',
                          subj = None,

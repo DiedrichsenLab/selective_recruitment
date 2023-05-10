@@ -83,44 +83,7 @@ def get_reliability_summary(dataset = "WMFS", ses_id = "ses-02", subtract_mean =
     
     return df
 
-def calc_mean(data,info,
-                partition='run',
-                condition='reg_id',
-                reorder=False):
-
-    """
-    Calculating mean per condition
-    Args:
-        data 
-        partition
-        condition
-        reorder
-    Returns:
-        mean_d
-        info
-    """
-    n_subj = data.shape[0]
-    cond=np.unique(info.reg_id)
-    n_cond = len(cond)
-
-    # For this purpose, ignore nan voxels
-    data = np.nan_to_num(data,copy=False)
-    
-    mean_d = data.mean(axis=2)
-    Z = matrix.indicator(info.reg_id)
-    mean_d = mean_d @ np.linalg.pinv(Z).T
-    
-    part = np.unique(info[partition])
-    inf=info[info[partition]==part[0]].copy()
-    if reorder:
-        inf=inf.sort_values(reorder)
-        ind=inf.index.to_numpy()
-        inf=inf.reset_index()
-        mean_d = mean_d[:,ind]
-    
-    return mean_d,inf
-
-def roi_regress(X, Y, fit_intercept = False):
+def regressXY(X, Y, fit_intercept = False):
     """
     regresses Y onto X.
     Will be used to regress observed cerebellar data onto predicted
@@ -154,7 +117,7 @@ def roi_regress(X, Y, fit_intercept = False):
 
     return coef, residual, R2
 
-def roi_pca(X, Y, zero_mean = False):
+def pcaXY(X, Y, zero_mean = False):
     """
     Applies PCA to X and Y
     Args:
@@ -315,8 +278,8 @@ def run_regress(df,fit_intercept = False):
             indx = (df.sn==s) & (df.roi==r)
 
             coef, res, R2 = regressXY(df.X[indx].to_numpy(),
-                                      df.Y[indx].to_numpy(), 
-                                     fit_intercept = fit_intercept)
+                                        df.Y[indx].to_numpy(), 
+                                        fit_intercept = fit_intercept)
             vec = np.ones(res.shape)
             df.loc[indx,'res'] = res
             df.loc[indx,'slope'] = coef[-1] * vec
@@ -344,8 +307,8 @@ def run_pca(df, zero_mean = False):
             indx = (df.sn==s) & (df.roi==r)
 
             coef,res, comvar,eig_vec = pcaXY(df.X[indx].to_numpy(),
-                                              df.Y[indx].to_numpy(), 
-                                              zero_mean=zero_mean)
+                                               df.Y[indx].to_numpy(), 
+                                               zero_mean=zero_mean)
             vec = np.ones(res.shape)
             df.loc[indx,'res'] = res
             df.loc[indx,'slope'] = coef[1]*vec

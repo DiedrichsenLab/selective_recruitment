@@ -10,6 +10,8 @@ import numpy as np
 import deepdish as dd
 import pandas as pd
 
+from scipy import stats as sps # to calcualte confidence intervals, etc
+
 import Functional_Fusion.dataset as ds
 import Functional_Fusion.atlas_map as am
 import Functional_Fusion.matrix as matrix
@@ -38,6 +40,33 @@ def add_rest_to_data(X,info):
                 'cond_num':max(info.reg_id)+1},index=[0])
     info_new = pd.concat([info,pd.DataFrame(a)],ignore_index=True)
     return X_new,info_new
+
+def prep_plotting_df(dataframe, agg_kw = {}, error = 'res', groupby = "cond_name"):
+    """
+    prepare the region dataframe to do the scatter plot
+    gets the mean across subjects (data point) and std of residuals
+    Args:
+        dataframe (pd.DataFrame) - dataframe with residuals info
+        agg_kw (dict) - dictionary determining info for dataframe aggregation
+        Example agg_kw: {'load': 'first',
+                         'phase': 'first',
+                         'recall': 'first',
+                         'X': np.mean,
+                         'Y': np.mean}
+    Returns:
+    g_df (pd.DataFrame) - dataframe ready for putting into the scatterplot function
+    """
+    # group by condition
+    grouped = dataframe.groupby([groupby])
+    g_df = grouped.agg(agg_kw)
+
+    g_std = grouped.std(numeric_only=True)
+    g_df["Y_CI"] = grouped.Y.apply(sps.sem) * 1.96
+    g_df["X_CI"] = grouped.X.apply(sps.sem)*1.96
+    g_df['err'] = g_std[error]
+
+
+    return g_df
 
 def get_voxdata_obs_pred(dataset = "WMFS", 
                          ses_id = 'ses-02',
@@ -252,7 +281,7 @@ def get_summary_conn(dataset = "WMFS",
                               unite_struct = False,
                               add_rest = add_rest, 
                               var = "X")
-                              
+
     # merge the dataframes, ignoring common columns (columns including task/region info)
     summary_df = pd.merge(left=obs_df, right=pred_df, how='inner')
     return summary_df
@@ -260,7 +289,7 @@ def get_summary_conn(dataset = "WMFS",
 
 if __name__ == "__main__":
 
-
+    # test case
     D = get_summary_conn(dataset = "WMFS", 
                      ses_id = 'ses-02',
                      subj = None, 

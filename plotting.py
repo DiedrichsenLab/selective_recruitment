@@ -26,7 +26,7 @@ import Functional_Fusion.atlas_map as am
 
 import cortico_cereb_connectivity.scripts.script_plot_weights as wplot
 
-
+# making the scatterplot
 def annotate(dataframe, x = "X", y = "Y", labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
     """
     annotate data points in the scatterplot
@@ -109,7 +109,7 @@ def make_scatterplot(dataframe, x = "X", y = "Y", split='cond_num', fit_line = T
             labels = df[split].map(labels))
     return
 
-
+# plotting cortical and cerebellar maps
 def plot_activation_map(dataset = "WMFS", 
                          ses_id = "ses-02", 
                          subj = "group",
@@ -337,7 +337,7 @@ def plot_connectivity_weight(roi_name = "D2R",
         ax.append(fig.figure)
     return ax
 
-
+# MDS plots
 def calc_mds(X,center=True,K=2):
     """
     calculate MDS for the given matrix
@@ -461,14 +461,4 @@ def plot_mds3_new(x, y,z,
 
 
 if __name__ == "__main__":
-    plot_connectivity_weight(roi_name = "D2R",
-                             method = "L2Regression",
-                             cortex_roi = "Icosahedron1002",
-                             cerebellum_roi = "NettekovenSym68c32",
-                             cerebellum_atlas = "SUIT3",
-                             log_alpha = 8,
-                             view = "lateral", 
-                             dataset_name = "MDTB",
-                             cmap = "coolwarm",
-                             colorbar = True, 
-                             ses_id = "ses-s1")
+    pass

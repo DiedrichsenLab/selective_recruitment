@@ -29,6 +29,45 @@ def get_label_names(parcellation, atlas_space = "SUIT3"):
     cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
     return label_info
 
+
+def get_parcels_single(label = "NettekovenSym68c32", 
+                        roi_name = "D1R"):
+    """
+    plot the selected region from parcellation on flatmap
+    Args:
+        parcellation (str) - name of the parcellation
+        roi_name (str) - name of the roi as stored in the lookup table
+    Return:
+        ax (axes object)
+        roi_num (int) - number corresponding to the region
+    """
+    # get_label_names
+    fname = gl.atlas_dir + f'/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii'
+    img = nb.load(fname)
+    # map it from volume to surface
+
+
+    # get the lookuptable for the parcellation
+    lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{label}.lut')
+
+    # get the label info
+    label_info = lookuptable[2]
+    if '0' not in label_info:
+        # append a 0 to it
+        label_info.insert(0, '0')
+    cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
+
+    # get the index for the region
+    roi_num = label_info.index(roi_name)
+    roi_flat = img_flat.copy()
+    # convert non-selected labels to nan
+    roi_flat[roi_flat != float(roi_num)] = np.nan
+    # plot the roi
+
+
+    return mask
+
+
 def get_region_info(label = 'NettekovenSym68c32AP', roi_super = "D"):
     # get the roi numbers of Ds only
     idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")

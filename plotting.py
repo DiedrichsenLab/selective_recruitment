@@ -260,7 +260,7 @@ def plot_parcels_single(label = "NettekovenSym68c32",
     fname = gl.atlas_dir + f'/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii'
     img = nb.load(fname)
     # map it from volume to surface
-    img_flat = flatmap.vol_to_surf([img], stats='mode', space = 'SUIT')
+    img_flat = flatmap.vol_to_surf([img], stats='mode', space = 'SUIT', ignore_zeros=True)
 
     # get the lookuptable for the parcellation
     lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{label}.lut')

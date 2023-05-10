@@ -7,19 +7,28 @@ import nibabel as nb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import re
 
 from pathlib import Path
 from collections import OrderedDict
 from matplotlib.colors import LinearSegmentedColormap
 
 
-def get_label_names(parcellation, atlas_space = "SUIT3"):
-    if atlas_space == "fs32k":
-        atlas_dir = "tpl-fs32k"
-    elif atlas_space == "SUIT3":
-        atlas_dir = 'tpl-SUIT'
+def get_label_names(parcellation = "NettekovenSym68c", atlas_space = "SUIT3"):
+    """returns the list of lable names from lut file
+    Args:
+        parcellation (str, optional) - name of the parcellation
+        atlas_space (str, optional) - name of the atlas space
+
+    Returns:
+        label_info (list) - list containing label names as they appear in the lut file
+    """
+
+    # get atlas_info
+    atlas, atlas_info = am.get_atlas(atlas_dir = gl.atlas_dir, atlas_str = atlas_space)
+    
     # get the lookuptable for the parcellation
-    lookuptable = nt.read_lut(gl.atlas_dir + f'/{atlas_dir}/atl-{parcellation}.lut')
+    lookuptable = nt.read_lut(gl.atlas_dir + f'/{atlas_info["dir"]}/atl-{parcellation}.lut')
 
     # get the label info
     label_info = lookuptable[2]
@@ -29,46 +38,34 @@ def get_label_names(parcellation, atlas_space = "SUIT3"):
     cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
     return label_info
 
+def get_parcels_single(parcellation = "NettekovenSym68c32", 
+                       atlas_space = "SUIT3",
+                       roi_exp = "D.?R"):
+    """returns a mask for the parcels that contain roi_exp
 
-def get_parcels_single(label = "NettekovenSym68c32", 
-                        roi_name = "D1R"):
-    """
-    plot the selected region from parcellation on flatmap
     Args:
-        parcellation (str) - name of the parcellation
-        roi_name (str) - name of the roi as stored in the lookup table
-    Return:
-        ax (axes object)
-        roi_num (int) - number corresponding to the region
+        parcellation (str, optional): _description_. Defaults to "NettekovenSym68c32".
+        atlas_space (str, optional): _description_. Defaults to "SUIT3".
+        roi_exp (str, optional): _description_. Defaults to "D.?R". other examples: "D.?1.", "D.?1.|D.?2.", "D.?1.R|D.?2.R
+
+    Returns:
+        mask (boolean): list of True and Falses for where the roi_exp is found
+        selected_ (list): list of rois that contain roi_exp
     """
     # get_label_names
-    fname = gl.atlas_dir + f'/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii'
-    img = nb.load(fname)
-    # map it from volume to surface
+    label_names = get_label_names(parcellation = parcellation, 
+                                  atlas_space = atlas_space)
+    
+    # use roi_exp to get the list of rois that contain roi_exp 
+    selected_ = re.findall(roi_exp, str(label_names))
+    
+    # make a list of boolean values for the where we find the selected_ in label_names
+    mask = np.isin(label_names, selected_)
 
 
-    # get the lookuptable for the parcellation
-    lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{label}.lut')
+    return mask, selected_
 
-    # get the label info
-    label_info = lookuptable[2]
-    if '0' not in label_info:
-        # append a 0 to it
-        label_info.insert(0, '0')
-    cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
-
-    # get the index for the region
-    roi_num = label_info.index(roi_name)
-    roi_flat = img_flat.copy()
-    # convert non-selected labels to nan
-    roi_flat[roi_flat != float(roi_num)] = np.nan
-    # plot the roi
-
-
-    return mask
-
-
-def get_region_info(label = 'NettekovenSym68c32AP', roi_super = "D"):
+def get_region_summary(label = 'NettekovenSym68c32AP', roi_super = "D"):
     # get the roi numbers of Ds only
     idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
     
@@ -256,5 +253,12 @@ def integrate_subparcels(atlas_space = "SUIT3", label = "NettekovenSym68c32", LR
 
 
 if __name__ == "__main__":
-
+    mask, selected_ = get_parcels_single(parcellation = "NettekovenSym68c32", 
+                                roi_exp = "D.?R")
+    print(mask)
+    print(selected_)
+    mask, selected_ = get_parcels_single(parcellation = "NettekovenSym68c32", 
+                                roi_exp = "D.?1.|D.?2.")
+    print(mask)
+    print(selected_)
     pass

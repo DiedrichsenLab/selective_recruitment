@@ -204,6 +204,45 @@ def plot_mapwise_recruitment(data,
     fig = flatmap.plot(sdata, render=render, colorbar = True, cmap = cmap, cscale = cscale, bordersize = 1.5)
     return fig
 
+def plot_parcels(parcellation = "NettekovenSym68c32",
+                 atlas_space = "SUIT3", 
+                 roi_exp = "D.?R", 
+                 render = "plotly"):
+    
+    # make an atlas object
+    atlas, ainfo = am.get_atlas(atlas_str = atlas_space, atlas_dir = gl.atlas_dir)    
+    
+    # get the list of all the regions
+    label_name_list = sroi.get_label_names(parcellation = parcellation, 
+                                           atlas_space = atlas_space)
+    
+    # get the mask and names of the selected regions
+    mask, selected_ = sroi.get_parcels_single(parcellation = parcellation, 
+                                              atlas_space = atlas_space,
+                                              roi_exp = roi_exp)
+    
+    # return the index number corresponding to Trues the mask
+    idx = np.where(mask)[0]
+    
+    # load the label file
+    fname = gl.atlas_dir + f'/{ainfo["dir"]}/atl-{parcellation}_space-SUIT_dseg.nii'
+    img = nb.load(fname)   
+    # use get parcel to get list of labels 
+    label_vec, labels = atlas.get_parcel(fname)
+    
+    # make a nifti image for the selected regions
+    dat_new = np.zeros_like(label_vec, dtype = float)
+    dat_new[np.isin(label_vec, idx)] = 1
+    
+    img = atlas.data_to_nifti(dat_new)
+    
+    # map it from volume to surface
+    img_flat = flatmap.vol_to_surf([img], stats='nanmean', space = 'SUIT', ignore_zeros=True)
+
+    ax = flatmap.plot(img_flat, render=render, bordersize = 1.5, 
+                      overlay_type='func')
+    return ax
+
 def plot_parcels_super(label = "NettekovenSym68c32", 
                        roi_super = "D", 
                        render = "plotly"):
@@ -461,4 +500,8 @@ def plot_mds3_new(x, y,z,
 
 
 if __name__ == "__main__":
+    plot_parcels(parcellation = "NettekovenSym68c32",
+                 atlas_space = "SUIT3", 
+                 roi_exp = "D.?R", 
+                 render = "plotly")
     pass

@@ -196,7 +196,7 @@ def plot_mapwise_recruitment(data,
     """
     if threshold is not None:
         # set values outside threshold to nan
-        data[np.abs(data)>threshold] = np.nan
+        data[np.abs(data)<=threshold] = np.nan
 
     atlas,ainf = am.get_atlas(atlas_space, gl.atlas_dir)
     X = atlas.data_to_nifti(data)

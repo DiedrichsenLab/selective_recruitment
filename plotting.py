@@ -207,7 +207,9 @@ def plot_mapwise_recruitment(data,
 def plot_parcels(parcellation = "NettekovenSym68c32",
                  atlas_space = "SUIT3", 
                  roi_exp = "D.?R", 
-                 render = "plotly"):
+                 merge = True, 
+                 render = "plotly", 
+                 cmap = 'tab20b'):
     
     # make an atlas object
     atlas, ainfo = am.get_atlas(atlas_str = atlas_space, atlas_dir = gl.atlas_dir)    
@@ -232,20 +234,24 @@ def plot_parcels(parcellation = "NettekovenSym68c32",
     
     # make a nifti image for the selected regions
     dat_new = np.zeros_like(label_vec, dtype = float)
-    dat_new[np.isin(label_vec, idx)] = 1
+    if merge: # merge into one single parcel
+        dat_new[np.isin(label_vec, idx)] = 1
+    else:
+        for i, r in enumerate(idx):
+            dat_new[np.isin(label_vec, r)] = i+1
+
     
     img = atlas.data_to_nifti(dat_new)
     
     # map it from volume to surface
     img_flat = flatmap.vol_to_surf([img], stats='nanmean', space = 'SUIT', ignore_zeros=True)
-
     ax = flatmap.plot(img_flat, render=render, bordersize = 1.5, 
-                      overlay_type='func')
+                      overlay_type='label', cmap = cmap)
     return ax
 
-def plot_parcels_super(label = "NettekovenSym68c32", 
-                       roi_super = "D", 
-                       render = "plotly"):
+def plot_parcels_multiple(label = "NettekovenSym68c32", 
+                          roi_super = "D", 
+                          render = "plotly"):
     """
     Plots the selected super region based on the parcellation defined by "parcellation"
     Args:

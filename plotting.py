@@ -107,82 +107,6 @@ def make_scatterplot(dataframe, x = "X", y = "Y", split='cond_num', fit_line = T
             text_size = 'small',
             text_weight = 'regular',
             labels = df[split].map(labels))
-    return
-
-# plotting cortical and cerebellar maps
-def plot_activation_map(dataset = "WMFS", 
-                         ses_id = "ses-02", 
-                         subj = "group",
-                         type = "CondAll", 
-                         atlas_space = "SUIT3", 
-                         contrast_name = "average", 
-                         render = "plotly", 
-                         view = "lateral", 
-                         cmap = "coolwarm",
-                         cscale = [-0.2, 0.2], 
-                         colorbar = True, 
-                         smooth = None):
-    """
-    """
-    # get dataset
-    data,info,dset = ds.get_dataset(gl.base_dir,
-                                    dataset = dataset,
-                                    atlas=atlas_space,
-                                    sess=ses_id,
-                                    subj=subj,
-                                    type = type,  
-                                    smooth = smooth)
-
-    # get the contrast of interest
-    if contrast_name == "average":
-        # make up a numpy array with all 1s as we want to average all the conditions
-        idx = np.ones([len(info.index), ], dtype = bool)
-    else:
-        idx = (info.names == contrast_name).values
-
-    # get the data for the contrast of interest
-    dat_con = np.nanmean(data[0, idx, :], axis = 0)
-
-    # prepare data for plotting
-    atlas, ainfo = am.get_atlas(atlas_space, gl.atlas_dir)
-    if atlas_space == "SUIT3":
-        # convert vol 2 surf
-        img_nii = atlas.data_to_nifti(dat_con)
-        # convert to flatmap
-        img_flat = flatmap.vol_to_surf([img_nii], 
-                                        stats='nanmean', 
-                                        space = 'SUIT', 
-                                        ignore_zeros=True)
-        ax = flatmap.plot(data=img_flat, 
-                          render=render, 
-                          hover='auto', 
-                          cmap = cmap, 
-                          colorbar = colorbar, 
-                          bordersize = 1, 
-                          cscale = cscale)
-
-    elif atlas_space == "fs32k":
-        # get inflated cortical surfaces
-        surfs = [gl.atlas_dir + f'/tpl-fs32k/tpl_fs32k_hemi-{h}_inflated.surf.gii' for i, h in enumerate(['L', 'R'])]
-
-        # first convert to cifti
-        img_cii = atlas.data_to_cifti(dat_con.reshape(-1, 1).T)
-        img_con = nt.surf_from_cifti(img_cii)
-        
-        ax = []
-        for h,hemi in enumerate(['left', 'right']):
-            fig = plotting.plot_surf_stat_map(
-                                            surfs[h], img_con[h], hemi=hemi,
-                                            # title='Surface left hemisphere',
-                                            colorbar=colorbar, 
-                                            view = view,
-                                            cmap=cmap,
-                                            engine='plotly',
-                                            symmetric_cbar = True,
-                                            vmax = cscale[1]
-                                        )
-
-            ax.append(fig.figure)
     return ax
 
 def plot_mapwise_recruitment(data, 
@@ -215,16 +139,13 @@ def plot_parcels(parcellation = "NettekovenSym68c32",
     atlas, ainfo = am.get_atlas(atlas_str = atlas_space, atlas_dir = gl.atlas_dir)    
     
     # get the list of all the regions
-    label_name_list = sroi.get_label_names(parcellation = parcellation, 
+    label_name_list = sroi.get_parcel_names(parcellation = parcellation, 
                                            atlas_space = atlas_space)
     
     # get the mask and names of the selected regions
-    mask, selected_ = sroi.get_parcels_single(parcellation = parcellation, 
+    mask, idx, selected_ = sroi.get_parcels_single(parcellation = parcellation, 
                                               atlas_space = atlas_space,
                                               roi_exp = roi_exp)
-    
-    # return the index number corresponding to Trues the mask
-    idx = np.where(mask)[0]
     
     # load the label file
     fname = gl.atlas_dir + f'/{ainfo["dir"]}/atl-{parcellation}_space-SUIT_dseg.nii'
@@ -247,87 +168,6 @@ def plot_parcels(parcellation = "NettekovenSym68c32",
     img_flat = flatmap.vol_to_surf([img], stats='nanmean', space = 'SUIT', ignore_zeros=True)
     ax = flatmap.plot(img_flat, render=render, bordersize = 1.5, 
                       overlay_type='label', cmap = cmap)
-    return ax
-
-def plot_parcels_multiple(label = "NettekovenSym68c32", 
-                          roi_super = "D", 
-                          render = "plotly"):
-    """
-    Plots the selected super region based on the parcellation defined by "parcellation"
-    Args:
-        parcellation (str) - name of the hierarchical parcellation 
-        roi_super (str) - name assigned to the roi in the hierarchical parcellation
-    Returns:
-        None
-    """
-    # get the roi numbers for the super roi
-    idx_label, colors2, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
-    
-    D_indx = [label_names.index(name) for name in label_names if roi_super in name]
-    D_name = [name for name in label_names if roi_super in name]
-    D_name.insert(0, '0')
-
-    fname = gl.atlas_dir + f'/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii'
-    img = nb.load(fname)
-    dat = img.get_fdata()
-    
-    # map it from volume to surface
-    img_flat = flatmap.vol_to_surf([img], stats='mode', space = 'SUIT')
-
-    # get a mask for the selected super region
-    region_mask = np.isin(img_flat.astype(int), D_indx)
-
-    # convert non-selected labels to nan
-    roi_flat = img_flat.copy()
-    # convert non-selected labels to nan
-    roi_flat[np.logical_not(region_mask)] = np.nan
-
-    for i, r in enumerate(D_indx):
-        roi_flat[roi_flat == r] = i+1
-    
-    ax = flatmap.plot(roi_flat, render=render, bordersize = 1.5, 
-                      overlay_type='label',
-                      label_names=D_name, cmap = 'tab20b')
-    return ax
-
-def plot_parcels_single(label = "NettekovenSym68c32", 
-                        roi_name = "D1R", 
-                        render = "plotly"):
-    """
-    plot the selected region from parcellation on flatmap
-    Args:
-        parcellation (str) - name of the parcellation
-        roi_name (str) - name of the roi as stored in the lookup table
-    Return:
-        ax (axes object)
-        roi_num (int) - number corresponding to the region
-    """
-    fname = gl.atlas_dir + f'/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii'
-    img = nb.load(fname)
-    # map it from volume to surface
-    img_flat = flatmap.vol_to_surf([img], stats='mode', space = 'SUIT', ignore_zeros=True)
-
-    # get the lookuptable for the parcellation
-    lookuptable = nt.read_lut(gl.atlas_dir + f'/tpl-SUIT/atl-{label}.lut')
-
-    # get the label info
-    label_info = lookuptable[2]
-    if '0' not in label_info:
-        # append a 0 to it
-        label_info.insert(0, '0')
-    cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
-
-    # get the index for the region
-    roi_num = label_info.index(roi_name)
-    roi_flat = img_flat.copy()
-    # convert non-selected labels to nan
-    roi_flat[roi_flat != float(roi_num)] = np.nan
-    # plot the roi
-    ax = flatmap.plot(roi_flat, render=render,
-                      hover='auto', colorbar = False,
-                      bordersize = 1.5, overlay_type='label',
-                      label_names=label_info, cmap = cmap)
-
     return ax
 
 def plot_connectivity_weight(roi_name = "D2R",

@@ -143,7 +143,7 @@ def plot_parcels(parcellation = "NettekovenSym68c32",
                                            atlas_space = atlas_space)
     
     # get the mask and names of the selected regions
-    mask, idx, selected_ = sroi.get_parcels_single(parcellation = parcellation, 
+    mask, idx, selected_ = sroi.get_parcel_single(parcellation = parcellation, 
                                               atlas_space = atlas_space,
                                               roi_exp = roi_exp)
     

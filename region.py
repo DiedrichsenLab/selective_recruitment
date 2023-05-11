@@ -38,7 +38,7 @@ def get_parcel_names(parcellation = "NettekovenSym68c", atlas_space = "SUIT3"):
     cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
     return label_info
 
-def get_parcels_single(parcellation = "NettekovenSym68c32", 
+def get_parcel_single(parcellation = "NettekovenSym68c32", 
                        atlas_space = "SUIT3",
                        roi_exp = "D.?R"):
     """returns a mask for the parcels that contain roi_exp

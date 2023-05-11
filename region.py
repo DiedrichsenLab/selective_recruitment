@@ -14,7 +14,7 @@ from collections import OrderedDict
 from matplotlib.colors import LinearSegmentedColormap
 
 
-def get_label_names(parcellation = "NettekovenSym68c", atlas_space = "SUIT3"):
+def get_parcel_names(parcellation = "NettekovenSym68c", atlas_space = "SUIT3"):
     """returns the list of lable names from lut file
     Args:
         parcellation (str, optional) - name of the parcellation
@@ -50,10 +50,11 @@ def get_parcels_single(parcellation = "NettekovenSym68c32",
 
     Returns:
         mask (boolean): list of True and Falses for where the roi_exp is found
+        idx (list): list of parcel numbers for the selected parcels
         selected_ (list): list of rois that contain roi_exp
     """
     # get_label_names
-    label_names = get_label_names(parcellation = parcellation, 
+    label_names = get_parcel_names(parcellation = parcellation, 
                                   atlas_space = atlas_space)
     
     # use roi_exp to get the list of rois that contain roi_exp 
@@ -61,9 +62,12 @@ def get_parcels_single(parcellation = "NettekovenSym68c32",
     
     # make a list of boolean values for the where we find the selected_ in label_names
     mask = np.isin(label_names, selected_)
+    
+    # return the index number corresponding to Trues the mask
+    idx = np.where(mask)[0]
 
 
-    return mask, selected_
+    return mask, idx, selected_
 
 def get_region_summary(label = 'NettekovenSym68c32AP', roi_super = "D"):
     # get the roi numbers of Ds only

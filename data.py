@@ -141,27 +141,22 @@ def get_summary_roi(tensor, info,
     Returns:
         summary_df (pd.Dataframe): a dataframe with the summary data for each parcecl within atlas_roi
     """
-
+    atlas, ainfo = am.get_atlas(atlas_dir=gl.atlas_dir, atlas_str=atlas_space)
     # get label file
     if atlas_space == "fs32k":
-        atlas_dir = f'{gl.atlas_dir}/tpl-fs32k'
         labels = []
         for hemi in ['L', 'R']:
-            labels.append(atlas_dir + f'/{atlas_roi}.{hemi}.label.gii')
+            labels.append(ainfo["dir"] + f'/{atlas_roi}.{hemi}.label.gii')
     else:
-        atlas_dir = f'{gl.atlas_dir}/tpl-SUIT'
-        labels = f'{atlas_dir}/atl-{atlas_roi}_space-SUIT_dseg.nii'
+        labels = f'{ainfo["dir"]}/atl-{atlas_roi}_space-SUIT_dseg.nii'
         
     # use lookuptable to get the names of the regions if lut file exists
-    if os.path.exists(f"{atlas_dir}/atl-{atlas_roi}.lut"):
-        region_info = sroi.get_label_names(atlas_roi, atlas_space= atlas_space)
+    if os.path.exists(f"{ainfo['dir']}/atl-{atlas_roi}.lut"):
+        region_info = sroi.get_parcel_names(atlas_roi, atlas_space= atlas_space)
     else: # if lut file doesn't exist, just use the parcel labels
         region_info = [f"parcel_{i}" for i in parcel_labels]
         
     # get average data per parcel
-    ## first get atlas object
-    atlas, ainfo = am.get_atlas(atlas_space,gl.atlas_dir)
-
     # NOTE: atlas.get_parcel takes in path to the label file, not an array
     if (isinstance(atlas, am.AtlasSurface)) | (isinstance(atlas, am.AtlasSurfaceSymmetric)):
         if labels is not None:

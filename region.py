@@ -14,7 +14,7 @@ from collections import OrderedDict
 from matplotlib.colors import LinearSegmentedColormap
 
 
-def get_parcel_names(parcellation = "NettekovenSym68c", atlas_space = "SUIT3"):
+def get_parcel_names(parcellation = "NettekovenSym68c32", atlas_space = "SUIT3"):
     """returns the list of lable names from lut file
     Args:
         parcellation (str, optional) - name of the parcellation

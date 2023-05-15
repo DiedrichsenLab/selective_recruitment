@@ -113,7 +113,6 @@ def pcaXY(X, Y, zero_mean = False):
 
     # getting the slope
     slope = eig_vec[1,0]/eig_vec[0,0]
-    # print(slope)
 
     # getting the intercept
     if zero_mean:

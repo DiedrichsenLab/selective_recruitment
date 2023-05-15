@@ -13,7 +13,9 @@ from adjustText import adjust_text # to adjust the text labels in the plots (pip
 import nibabel as nb
 import nitools as nt
 from nilearn import plotting
-from SUITPy import flatmap
+import SUITPy.flatmap as flatmap
+import surfAnalysisPy as sa
+
 
 from scipy import stats as sps # to calcualte confidence intervals, etc
 from statsmodels.stats.anova import AnovaRM # perform F test
@@ -222,6 +224,38 @@ def plot_connectivity_weight(roi_name = "D2R",
         ax.append(fig.figure)
     return ax
 
+def plot_rgb_map(data_rgb, 
+                 atlas_space = "SUIT3", 
+                 render = "plotly", 
+                 scale = [0.02, 1, 0.02], 
+                 threshold = [0.02, 1, 0.02]):
+    """
+    plots rgb map of overlap on flatmap
+    Args:
+        data_rgb (np.ndarray) - 3*p array containinig rgb values per voxel/vertex
+        atlas_space (str) - the atlas you are in, either SUIT3 or fs32k
+        scale (list) - how much do you want to scale
+        threshold (list) - threshold to be applied to the values
+    Returns:
+        ax (plt axes object) 
+    """
+    atlas, a_info = am.get_atlas(atlas_str=atlas_space, atlas_dir=gl.atlas_dir)
+    if atlas_space == "SUIT3":
+        Nii = atlas.data_to_nifti(data_rgb)
+        data = flatmap.vol_to_surf(Nii,space='SUIT')
+        rgb = flatmap.map_to_rgb(data,scale=scale,threshold=threshold)
+        ax = flatmap.plot(rgb,overlay_type='rgb', colorbar = True)
+    elif atlas_space == "fs32k":
+        dat_cifti = atlas.data_to_cifti(data_rgb)
+        # get the lists of data for each hemi
+        dat_list = nt.surf_from_cifti(dat_cifti)
+        ax = []
+        for i,hemi in enumerate(['L', 'R']):
+            plt.figure()
+            rgb = flatmap.map_to_rgb(dat_list[i].T,scale,threshold=threshold)
+            ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
+
+    return ax
 # MDS plots
 def calc_mds(X,center=True,K=2):
     """

@@ -146,34 +146,33 @@ def get_summary_roi(tensor, info,
     if atlas_space == "fs32k":
         labels = []
         for hemi in ['L', 'R']:
-            labels.append(ainfo["dir"] + f'/{atlas_roi}.{hemi}.label.gii')
+            labels.append(gl.atlas_dir + f'/{ainfo["dir"]}/{atlas_roi}.{hemi}.label.gii')
     else:
-        labels = f'{ainfo["dir"]}/atl-{atlas_roi}_space-SUIT_dseg.nii'
-        
-    # use lookuptable to get the names of the regions if lut file exists
-    if os.path.exists(f"{ainfo['dir']}/atl-{atlas_roi}.lut"):
-        region_info = sroi.get_parcel_names(atlas_roi, atlas_space= atlas_space)
-    else: # if lut file doesn't exist, just use the parcel labels
-        region_info = [f"parcel_{i}" for i in parcel_labels]
+        labels = gl.atlas_dir + f'/{ainfo["dir"]}/atl-{atlas_roi}_space-SUIT_dseg.nii'
         
     # get average data per parcel
     # NOTE: atlas.get_parcel takes in path to the label file, not an array
     if (isinstance(atlas, am.AtlasSurface)) | (isinstance(atlas, am.AtlasSurfaceSymmetric)):
         if labels is not None:
-            atlas.get_parcel(labels, unite_struct = unite_struct)
+            label_vec, _ = atlas.get_parcel(labels, unite_struct = unite_struct)
             
         else: # passes on mask to get parcel if you want the average across the whole structure
-            atlas.label_vector = np.ones((atlas.P,),dtype=int)
+            label_vec = np.ones((atlas.P,),dtype=int)
 
     else:
         if labels is not None:
-            atlas.get_parcel(labels)
+            label_vec, _ = atlas.get_parcel(labels)
         else: # passes on mask to get parcel if you want the average across the whole structure
-            atlas.label_vector = np.ones((atlas.P,),dtype=int)
+            label_vec = atlas.label_vector = np.ones((atlas.P,),dtype=int)
     # aggregate over voxels/vertices within parcels
     parcel_data, parcel_labels = ds.agg_parcels(tensor , 
                                                 atlas.label_vector, 
                                                 fcn=np.nanmean)
+    # use lookuptable to get the names of the regions if lut file exists
+    if os.path.exists(f"{gl.atlas_dir}/{ainfo['dir']}/atl-{atlas_roi}.lut"):
+        region_info = sroi.get_parcel_names(atlas_roi, atlas_space= atlas_space)
+    else: # if lut file doesn't exist, just use the parcel labels
+        region_info = [f"parcel_{i}" for i in parcel_labels]
 
     # add rest condition for control? if it's not already in the info
     if add_rest:

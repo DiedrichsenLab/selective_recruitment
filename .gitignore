@@ -141,3 +141,4 @@ selective_recruitment.code-workspace
 notebooks/working_memory_avg_activation_enc_L.pdf
 *.pdf
 *.pdf
+ridge_reg.py

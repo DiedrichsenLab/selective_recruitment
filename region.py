@@ -13,6 +13,8 @@ from pathlib import Path
 from collections import OrderedDict
 from matplotlib.colors import LinearSegmentedColormap
 
+import SUITPy.flatmap as flatmap
+
 
 def get_parcel_names(parcellation = "NettekovenSym68c32", atlas_space = "SUIT3"):
     """returns the list of lable names from lut file
@@ -255,14 +257,104 @@ def integrate_subparcels(atlas_space = "SUIT3", label = "NettekovenSym68c32", LR
     nt.save_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{fname}.lut", idx_new, np.array(colors_new), label_names_new)
     return
 
+def parcels():
+    
+    # make path
+    parcel_path = "A:\\data\\FunctionalFusion\\Atlases\\tpl-SUIT\\atl-NettekovenSym68c32_space-SUIT_probseg.nii"
+    parcel_file = nb.load(parcel_path)
+    
+    # load in the lobules parcellation
+    lobule_file = f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom_space-SUIT_dseg.nii"
+    
+    
+    # project to flatmap
+    surf_data = flatmap.vol_to_surf(parcel_file, stats='nanmean',
+                                     space='SUIT')
+    
+    lobule_data = flatmap.vol_to_surf(lobule_file, stats='mode', space='SUIT')
+    
+    # load the lut file for the lobules 
+    idx_lobule, _, lobule_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom.lut")
+
+    # demarcate the horizontal fissure
+    ## horizontal fissure is between crusI and crusII.
+    ## everything above crusII is the anterior part
+    ## find the indices for crusII
+    crusII_idx = [lobule_names.index(name) for name in lobule_names if "CrusII" in name]
+    posterior_idx = idx_lobule[min(crusII_idx):]
+    anterior_idx = idx_lobule[0:min(crusII_idx)]
+    # assign value 1 to the anterior part
+    anterior_mask = np.isin(lobule_data, anterior_idx)
+
+    # assign value 2 to the posterior part
+    posterior_mask = np.isin(lobule_data, posterior_idx)
+    
+    # get the names of the labels
+    idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-NettekovenSym68c32.lut")
+    # get the labels
+    label = np.argmax(surf_data, axis=1) + 1
+    
+    # divide into anterior and posterior
+    # loop over regions and divide them into two parts
+    idx_new = [0]
+    colors_new = [[0, 0, 0, 1]]
+    label_new = ["0"] 
+    label_array = np.zeros(label.shape)
+    idx_num = 1
+    for i in np.unique(label):
+
+        # get a copy of label data
+        label_copy = label.copy().reshape(-1, 1)
+
+        # convert all the labels other than the current one to NaNs
+        label_copy[label_copy != i] = 0
+
+        # get the anterior and posterior part
+        label_anterior = label_copy * anterior_mask
+        label_posterior = label_copy * posterior_mask
+
+        if any(label_anterior): # some labels only have posterior parts
+            # get the anterior part
+            label_new.append(f"{label_names[i]}_A")
+            idx_new.append(idx_num)
+            colors_new.append(list(np.append(colors[i, :], 1))) 
+            label_array[np.argwhere(label_anterior)] = idx_num
+            idx_num=idx_num+1
+
+        if any(label_posterior):
+            # get the posterior part
+            label_new.append(f"{label_names[i]}_P")
+            idx_new.append(idx_num)
+            colors_new.append(list(np.append(colors[i, :], 1))) 
+            label_array[np.argwhere(label_posterior)] = idx_num
+
+            idx_num=idx_num+1
+
+
+    # create a nifti object
+    # nii = atlas_suit.data_to_nifti(label_array)
+
+    # # save the nifti
+    # nb.save(nii, f"{gl.atlas_dir}/tpl-SUIT/atl-{label}AP_space-SUIT_dseg.nii")
+
+    # save the lookuptable
+    # nt.save_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}AP22.lut", idx_new, np.array(colors_new), label_new)
+    
+    gii = nt.make_label_gifti(
+                    label_array.reshape(-1, 1),
+                    anatomical_struct='Cerebellum',
+                    labels=None,
+                    label_names=label_new,
+                    column_names=None,
+                    label_RGBA=None
+                    )
+    nb.save(gii, "./test.label.gii")
+    
+    print("hello")
+    return
+
+
 
 if __name__ == "__main__":
-    mask, selected_ = get_parcels_single(parcellation = "NettekovenSym68c32", 
-                                roi_exp = "D.?R")
-    print(mask)
-    print(selected_)
-    mask, selected_ = get_parcels_single(parcellation = "NettekovenSym68c32", 
-                                roi_exp = "D.?1.|D.?2.")
-    print(mask)
-    print(selected_)
+    parcels()
     pass

@@ -133,7 +133,8 @@ def plot_mapwise_recruitment(data,
 def plot_parcels(parcellation = "NettekovenSym68c32",
                  atlas_space = "SUIT3", 
                  roi_exp = "D.?R", 
-                 merge = True, 
+                 split = None, 
+                 stats = "mode", 
                  render = "plotly", 
                  cmap = 'tab20b'):
     
@@ -149,6 +150,8 @@ def plot_parcels(parcellation = "NettekovenSym68c32",
                                               atlas_space = atlas_space,
                                               roi_exp = roi_exp)
     
+    print(selected_)
+        
     # load the label file
     fname = gl.atlas_dir + f'/{ainfo["dir"]}/atl-{parcellation}_space-SUIT_dseg.nii'
     img = nb.load(fname)   
@@ -157,17 +160,17 @@ def plot_parcels(parcellation = "NettekovenSym68c32",
     
     # make a nifti image for the selected regions
     dat_new = np.zeros_like(label_vec, dtype = float)
-    if merge: # merge into one single parcel
+    if split is None: # merge into one single parcel
         dat_new[np.isin(label_vec, idx)] = 1
     else:
         for i, r in enumerate(idx):
-            dat_new[np.isin(label_vec, r)] = i+1
+            dat_new[np.isin(label_vec, r)] = split[i]
 
     
     img = atlas.data_to_nifti(dat_new)
     
     # map it from volume to surface
-    img_flat = flatmap.vol_to_surf([img], stats='nanmean', space = 'SUIT', ignore_zeros=True)
+    img_flat = flatmap.vol_to_surf([img], stats=stats, space = 'SUIT', ignore_zeros=True)
     ax = flatmap.plot(img_flat, render=render, bordersize = 1.5, 
                       overlay_type='label', cmap = cmap)
     return ax
@@ -182,6 +185,7 @@ def plot_connectivity_weight(roi_name = "D2R",
                              dataset_name = "MDTB",
                              cmap = "coolwarm",
                              colorbar = True, 
+                             cscale = [-0.0001, 0.0001],
                              ses_id = "ses-s1"):
     """
     """
@@ -218,7 +222,7 @@ def plot_connectivity_weight(roi_name = "D2R",
                                         cmap=cmap,
                                         engine='plotly',
                                         symmetric_cbar = True,
-                                        vmax = np.nanmax(weight_roi_list[0]),
+                                        vmax = cscale[1],
                                     )
         print(np.nanmax(weight_roi_list[0]))
         ax.append(fig.figure)
@@ -244,7 +248,7 @@ def plot_rgb_map(data_rgb,
         Nii = atlas.data_to_nifti(data_rgb)
         data = flatmap.vol_to_surf(Nii,space='SUIT')
         rgb = flatmap.map_to_rgb(data,scale=scale,threshold=threshold)
-        ax = flatmap.plot(rgb,overlay_type='rgb', colorbar = True)
+        ax = flatmap.plot(rgb,overlay_type='rgb', colorbar = True, render = render)
     elif atlas_space == "fs32k":
         dat_cifti = atlas.data_to_cifti(data_rgb)
         # get the lists of data for each hemi
@@ -252,7 +256,7 @@ def plot_rgb_map(data_rgb,
         ax = []
         for i,hemi in enumerate(['L', 'R']):
             plt.figure()
-            rgb = flatmap.map_to_rgb(dat_list[i].T,scale,threshold=threshold)
+            rgb = flatmap.map_to_rgb(dat_list[i].T,scale,threshold=threshold, render = "matplotlib")
             ax.append(sa.plot.plotmap(rgb, surf = f'fs32k_{hemi}',overlay_type='rgb'))
 
     return ax
@@ -299,7 +303,35 @@ def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regula
             ax.quiver(0,0,v[0,i],v[1,i],angles='xy',scale_units='xy',width=0.002,scale=1.0)
             if v_labels is not None:
                 ax.text(v[0,i]*1.05,v[1,i]*1.05,v_labels[i],horizontalalignment='center',verticalalignment='center')
-    return
+    return ax
+
+def plot_mds_sns(data, x, y, label = "roi_hemi", hue = 'roi_idx', style = 'roi_ap', palette = "Dark2", vectors = None,v_labels = None):
+    ax = plt.gca()
+    # Scatter plot with axis equal
+    sns.scatterplot(data=data,x=x,y=y,hue=hue,style=style, palette=palette,s=100, ax=ax)
+    
+    texts = []
+    for i,l in enumerate(data[label]):
+        text = ax.text(
+                        data[x][i] + 0.001,
+                        data[y][i],
+                        s = l,
+                        horizontalalignment='left',
+                        size="medium",
+                        weight='regular'
+                        )
+        texts.append(text)
+    adjust_text(texts) # make sure you have installed adjust_text
+    if vectors is not None:
+        scl=(ax.get_xlim()[1]-ax.get_xlim()[0])/4
+        v = vectors*scl
+
+        for i in range(vectors.shape[1]):
+            ax.quiver(0,0,v[0,i],v[1,i],angles='xy',scale_units='xy',width=0.002,scale=1.0)
+            if v_labels is not None:
+                ax.text(v[0,i]*1.05,v[1,i]*1.05,v_labels[i],horizontalalignment='center',verticalalignment='center')
+    return ax
+
 
 def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 'regular',vectors = None,v_labels = None):
     fig = plt.figure()
@@ -330,7 +362,7 @@ def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 're
                 ax.text(v[0,i]*1.05,v[1,i]*1.05,v[2,i]*1.05,v_labels[i],horizontalalignment='center',verticalalignment='center')
     return
 
-def plot_mds3_new(x, y,z, 
+def plot_mds3_plotly(x, y,z, 
                   vectors = None,
                   label = "NettekovenSym68c32", 
                   roi_super = "D", 
@@ -338,7 +370,7 @@ def plot_mds3_new(x, y,z,
                   text = "roi_name", 
                   vec_labels = ['retrieval+','load+','backwards+']):
     # get region info
-    Dinfo,D_indx, colors_D = sroi.get_region_info(label = label, roi_super = roi_super)
+    Dinfo,D_indx, colors_D = sroi.get_parcel_names(parcellation = label, atlas_space = "SUIT3")
     # adding the components to the D region info dataframe
     Dinfo["comp_0"] = x
     Dinfo["comp_1"] = y

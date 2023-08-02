@@ -15,7 +15,7 @@ import Functional_Fusion.util as futil
 import Functional_Fusion.matrix as fmatrix
 import selective_recruitment.globals as gl
 import selective_recruitment.data as sdata
-import regress as ra
+import selective_recruitment.regress as ra
 import cortico_cereb_connectivity.globals as ccc_gl
 import PcmPy as pcm
 import SUITPy as suit

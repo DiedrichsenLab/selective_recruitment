@@ -130,7 +130,7 @@ def plot_mapwise_recruitment(data,
     fig = flatmap.plot(sdata, render=render, colorbar = True, cmap = cmap, cscale = cscale, bordersize = 1.5)
     return fig
 
-def plot_parcels(parcellation = "NettekovenSym68c32",
+def plot_parcels(parcellation = "NettekovenSym32",
                  atlas_space = "SUIT3", 
                  roi_exp = "D.?R", 
                  split = None, 
@@ -228,6 +228,38 @@ def plot_connectivity_weight(roi_name = "D2R",
         ax.append(fig.figure)
     return ax
 
+def plot_significant_activity_cortex(data, 
+                                        cortex_roi = "Icosahedron1002", 
+                                        dataset = "WMFS", 
+                                        
+                                        ):
+    # create an instance of the dataset class
+    Data = ds.get_dataset_class(base_dir = gl.base_dir, dataset = "WMFS")
+    ## make atlas object first
+    atlas_fs, _ = am.get_atlas("fs32k", gl.atlas_dir)
+    
+    # load the label file for the cortex
+    label_fs = [gl.atlas_dir + f"/tpl-fs32k/{cortex_roi}.{hemi}.label.gii" for hemi in ["L", "R"]]
+
+    # get parcels for the neocortex
+    _, label_fs = atlas_fs.get_parcel(label_fs, unite_struct = False)
+    
+    # get the maps for left and right hemispheres
+    surf_map = []
+    for label in atlas_fs.label_list:
+        # loop over regions within the hemisphere
+        label_arr = np.zeros([data.T.shape[0], label.shape[0]])
+        for p in np.arange(1, data.T.shape[0]):
+            for i in np.unique(label):            
+                np.put_along_axis(label_arr[p-1, :], np.where(label==i)[0], data.T[p-1,i-1], axis=0)
+        surf_map.append(label_arr)
+
+    cifti_img = atlas_fs.data_to_cifti(surf_map)
+    
+    return cifti_img
+    
+
+
 def plot_rgb_map(data_rgb, 
                  atlas_space = "SUIT3", 
                  render = "plotly", 
@@ -282,6 +314,7 @@ def plot_mds(x, y, label, colors=None,text_size = 'small', text_weight = 'regula
     ax = plt.gca()
     # Scatter plot with axis equal
     ax.scatter(x, y, s=100, c = colors)
+    # ax.plot(x, y, color = 'black')
     ax.axis('equal')
     texts = []
     for i,l in enumerate(label):
@@ -338,7 +371,18 @@ def plot_mds3(x, y, z, label, colors=None,text_size = 'small', text_weight = 're
     ax = fig.add_subplot(projection='3d')
     # ax = plt.gca(projection='3d')
     ax.scatter(x,y, z,s=70,c=colors)
+        
+    
+    # ax.plot(x, y, z, color='black')
     ax.set_box_aspect((1, 1, 1))
+    
+    # set axis labels
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+    ax.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+    ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
     texts = []
 
     for i,l in enumerate(label):
@@ -412,8 +456,16 @@ def plot_mds3_plotly(x, y,z,
 
 
 if __name__ == "__main__":
-    plot_parcels(parcellation = "NettekovenSym68c32",
-                 atlas_space = "SUIT3", 
-                 roi_exp = "D.?R", 
-                 render = "plotly")
+    plot_connectivity_weight(roi_name = "D2R",
+                             method = "L2Regression",
+                             cortex_roi = "Icosahedron1002",
+                             cerebellum_roi = "NettekovenSym32",
+                             cerebellum_atlas = "SUIT3",
+                             log_alpha = 8,
+                             view = "lateral", 
+                             dataset_name = "MDTB",
+                             cmap = "coolwarm",
+                             colorbar = True, 
+                             cscale = [-0.0001, 0.0001],
+                             ses_id = "ses-s1")
     pass

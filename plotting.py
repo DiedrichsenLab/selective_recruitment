@@ -56,8 +56,14 @@ def annotate(dataframe, x = "X", y = "Y", labels = 'cond_num', text_size = 'smal
 
     adjust_text(texts) # make sure you have installed adjust_text
 
-def make_scatterplot(dataframe, x = "X", y = "Y", split='cond_num', fit_line = True, labels=None,
-        colors=None,markers=None):
+def make_scatterplot(dataframe, 
+                     x = "X", 
+                     y = "Y", 
+                     split='cond_num', 
+                     fit_line = True, 
+                     labels=None,
+                     colors=None,
+                     markers=None):
     """
     make scatterplot
     Args:

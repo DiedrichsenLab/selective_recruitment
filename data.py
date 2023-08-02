@@ -50,6 +50,7 @@ def get_voxdata_obs_pred(dataset = "WMFS",
                          mname_base = "MDTB_ses-s1",
                          mmethod = "L2Regression_A8",
                          add_rest = False, 
+                         train_type = "train_noint",
                          crossed = True):
     """gets the obsesrved and predicted voxel data for a given dataset and model.
 
@@ -84,7 +85,7 @@ def get_voxdata_obs_pred(dataset = "WMFS",
     ## first get alpha and method name
     method, alpha = mmethod.split("_")
     mname = f"{mname_base}_{cortex}_{method}"
-    model_path = os.path.join(ccc_gl.conn_dir,atlas_space,'train',mname)
+    model_path = os.path.join(ccc_gl.conn_dir,atlas_space,train_type,mname)
     fname = model_path + f"/{mname}_{alpha}_avg.h5" # get the model averaged over subjects
     json_name = model_path + f"/{mname}_{alpha}_avg.json"
     conn_model = dd.io.load(fname)
@@ -122,7 +123,7 @@ def get_voxdata_obs_pred(dataset = "WMFS",
 
 def get_summary_roi(tensor, info, 
                      atlas_space = "SUIT3",
-                     atlas_roi = "NettekovenSym68c32", 
+                     atlas_roi = "NettekovenSym32", 
                      unite_struct = False,
                      add_rest = True, 
                      var = "Y"):
@@ -143,36 +144,47 @@ def get_summary_roi(tensor, info,
     """
     atlas, ainfo = am.get_atlas(atlas_dir=gl.atlas_dir, atlas_str=atlas_space)
     # get label file
-    if atlas_space == "fs32k":
-        labels = []
-        for hemi in ['L', 'R']:
-            labels.append(gl.atlas_dir + f'/{ainfo["dir"]}/{atlas_roi}.{hemi}.label.gii')
+    if (isinstance(atlas, am.AtlasSurface)) | (isinstance(atlas, am.AtlasSurfaceSymmetric)):
+        if atlas_roi is not None:
+            labels = []
+            for hemi in ['L', 'R']:
+                labels.append(gl.atlas_dir + f'/{ainfo["dir"]}/{atlas_roi}.{hemi}.label.gii')
+            label_vec, _ = atlas.get_parcel(labels, unite_struct = unite_struct)
+        else:
+            label_vec = np.ones((atlas.P,),dtype=int)
+            
     else:
-        labels = gl.atlas_dir + f'/{ainfo["dir"]}/atl-{atlas_roi}_space-SUIT_dseg.nii'
+        if atlas_roi is not None:
+            
+            labels = gl.atlas_dir + f'/{ainfo["dir"]}/atl-{atlas_roi}_space-SUIT_dseg.nii'
+            label_vec, _ = atlas.get_parcel(labels)
+        else:
+            label_vec = atlas.label_vector = np.ones((atlas.P,),dtype=int)
+            
         
     # get average data per parcel
     # NOTE: atlas.get_parcel takes in path to the label file, not an array
-    if (isinstance(atlas, am.AtlasSurface)) | (isinstance(atlas, am.AtlasSurfaceSymmetric)):
-        if labels is not None:
-            label_vec, _ = atlas.get_parcel(labels, unite_struct = unite_struct)
-            
-        else: # passes on mask to get parcel if you want the average across the whole structure
-            label_vec = np.ones((atlas.P,),dtype=int)
+    # if (isinstance(atlas, am.AtlasSurface)) | (isinstance(atlas, am.AtlasSurfaceSymmetric)):
+    #     if labels is not None:
+    #         label_vec, _ = atlas.get_parcel(labels, unite_struct = unite_struct)
+    #     else: # passes on mask to get parcel if you want the average across the whole structure
+    #         label_vec = np.ones((atlas.P,),dtype=int)
 
-    else:
-        if labels is not None:
-            label_vec, _ = atlas.get_parcel(labels)
-        else: # passes on mask to get parcel if you want the average across the whole structure
-            label_vec = atlas.label_vector = np.ones((atlas.P,),dtype=int)
+    # else:
+    #     if labels is not None:
+    #         label_vec, _ = atlas.get_parcel(labels)
+    #     else: # passes on mask to get parcel if you want the average across the whole structure
+    #         label_vec = atlas.label_vector = np.ones((atlas.P,),dtype=int)
     # aggregate over voxels/vertices within parcels
     parcel_data, parcel_labels = ds.agg_parcels(tensor , 
-                                                atlas.label_vector, 
+                                                label_vec, 
                                                 fcn=np.nanmean)
     # use lookuptable to get the names of the regions if lut file exists
     if os.path.exists(f"{gl.atlas_dir}/{ainfo['dir']}/atl-{atlas_roi}.lut"):
         region_info = sroi.get_parcel_names(atlas_roi, atlas_space= atlas_space)
     else: # if lut file doesn't exist, just use the parcel labels
         region_info = [f"parcel_{i}" for i in parcel_labels]
+        region_info.insert(0,"None")
 
     # add rest condition for control? if it's not already in the info
     if add_rest:
@@ -209,7 +221,7 @@ def get_summary_conn(dataset = "WMFS",
                      ses_id = 'ses-02',
                      subj = None, 
                      atlas_space = "SUIT3", 
-                     cerebellum_roi = "NettekovenSym68c32", 
+                     cerebellum_roi = "NettekovenSym32", 
                      cortex_roi = "Icosahedron1002",
                      type = "CondHalf", 
                      add_rest = True,
@@ -255,17 +267,31 @@ def get_summary_conn(dataset = "WMFS",
 
 
 if __name__ == "__main__":
-
-    # test case
-    D = get_summary_conn(dataset = "WMFS", 
+    
+    # create an instance of the dataset class
+    Data = ds.get_dataset_class(base_dir = gl.base_dir, dataset = "WMFS")
+    df = get_summary_conn(dataset = "WMFS", 
                      ses_id = 'ses-02',
                      subj = None, 
                      atlas_space = "SUIT3", 
-                     cerebellum_roi = "NettekovenSym68c32", 
+                     cerebellum_roi = "NettekovenSym32", 
                      cortex_roi = "Icosahedron1002",
                      type = "CondHalf", 
                      add_rest = True,
                      mname_base = "MDTB_ses-s1",
                      mmethod = "L2Regression_A8", 
                      crossed = True)
+
+    # test case
+    # D = get_summary_conn(dataset = "WMFS", 
+    #                  ses_id = 'ses-02',
+    #                  subj = None, 
+    #                  atlas_space = "SUIT3", 
+    #                  cerebellum_roi = "NettekovenSym68c32", 
+    #                  cortex_roi = "Icosahedron1002",
+    #                  type = "CondHalf", 
+    #                  add_rest = True,
+    #                  mname_base = "MDTB_ses-s1",
+    #                  mmethod = "L2Regression_A8", 
+    #                  crossed = True)
     pass

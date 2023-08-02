@@ -143,7 +143,7 @@ def make_parcelfs32k_lut(atlas_space = "fs32k", label = "glasser"):
     return
 
 def make_glasser_select_list(sub_roi_list = ['IFJp', '6r', 'SCEF', '6ma'], 
-                             colors = [ 
+                             color_labels = [ 
                                        '#C283B5FF', # purple
                                         '#BA611BFF', # dark orange
                                         '#158B6AFF', # green
@@ -191,11 +191,11 @@ def make_glasser_select_list(sub_roi_list = ['IFJp', '6r', 'SCEF', '6ma'],
 
         labels_sel = np.hstack(["none", labels_sel])
 
-        if colors is None:
+        if color_labels is None:
             colors_sel = np.hstack([colors_sel, np.ones([colors_sel.shape[0], 1])])
             colors_sel = np.vstack([[0, 0, 0, 1], colors_sel])
         else: 
-            colors_sel = np.hstack([np.array(colors), np.ones([np.array(colors).shape[0], 1])])
+            colors_sel = np.hstack([np.array(color_labels), np.ones([np.array(color_labels).shape[0], 1])])
             colors_sel = np.vstack([[0, 0, 0, 1], np.array(colors_sel)])
 
         
@@ -208,10 +208,15 @@ def make_glasser_select_list(sub_roi_list = ['IFJp', '6r', 'SCEF', '6ma'],
                     column_names=None,
                     label_RGBA=colors_sel
                     )
-        nb.save(gii,f"{gl.atlas_dir}/tpl-fs32k/glasser_selected.{hemi}.label.gii")
+        nb.save(gii,f"{gl.atlas_dir}/tpl-fs32k/glasser_md.{hemi}.label.gii")
     return
 
 if __name__ == "__main__":
-    
-    make_glasser_select_list(sub_roi_list = ['IFJp', '6r', 'SCEF', '6ma'])
+    make_glasser_select_list(sub_roi_list = ["a9-46v", "p10p", "a10p", "11l", "a47r", 
+                    "p47r", "FOP5", "AVl", "6r", "IFJp", "8C", "p9-46v", 
+                    "i6-8", "s6-8", "AIP", "IP2", "IP1", 
+                    "LIPd", "MIP", "PGs", "PFm", "TE1m", "TE1p", 
+                    "POS2", "SCEF", "8BM", "a32pr", "d32"], 
+                    color_labels= None)
+    # make_glasser_select_list(sub_roi_list = ['IFJp', '6r', 'SCEF', '6ma'])
     pass

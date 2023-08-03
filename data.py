@@ -41,6 +41,38 @@ def add_rest_to_data(X,info):
     info_new = pd.concat([info,pd.DataFrame(a)],ignore_index=True)
     return X_new,info_new
 
+def get_voxdata_cereb_cortex(dataset = "MDTB", 
+                         ses_id = 'all',
+                         subj = None,
+                         cereb_space='SUIT3',
+                         cortex_space = 'fs32k',
+                         type = "CondAll",
+                         add_rest = False):
+    """ Gets the matching vertex / voxel data for cerebellum and cortex without applying a connectivity model - returned in atlas space 
+
+        
+    Returns:
+        Y (np.ndarray): observed cerebellar data (n_subj,n_cond,n_vox)
+        X (np.ndarray): predicted cortical data (n_subj,n_cond,n_vox)
+        info (pd.DataFrame): dataframe with info for data 
+    """
+    
+    # get observed cerebellar data
+    Y,info,dset = ds.get_dataset(gl.base_dir,dataset,
+                                    atlas=cereb_space,
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type)
+        
+    # get cortical data to be used as input to the connectivity model
+    X,info,dset = ds.get_dataset(gl.base_dir,dataset,
+                                    atlas=cortex_space, 
+                                    sess=ses_id,
+                                    subj=subj,
+                                    type = type)
+    
+    return Y, X, info
+
 def get_voxdata_obs_pred(dataset = "WMFS", 
                          ses_id = 'ses-02',
                          subj = None,
@@ -52,7 +84,7 @@ def get_voxdata_obs_pred(dataset = "WMFS",
                          add_rest = False, 
                          train_type = "train_noint",
                          crossed = True):
-    """gets the obsesrved and predicted voxel data for a given dataset and model.
+    """gets the observed and predicted voxel data for a given dataset and model.
 
     Args:
         dataset (str, optional): name of the dataset to make predictions for. Defaults to "WMFS".
@@ -231,7 +263,7 @@ def get_summary_conn(dataset = "WMFS",
 
     """
     Function to get summary dataframe using connectivity model to predict cerebellar activation.
-    It's written similar to get_symmary from recruite_ana code
+    It's written similar to get_summary from recruite_ana code
     """
     
     # get observed and predicted data for each cerebellar voxel

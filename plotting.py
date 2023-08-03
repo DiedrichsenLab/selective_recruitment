@@ -12,7 +12,7 @@ from adjustText import adjust_text # to adjust the text labels in the plots (pip
 
 import nibabel as nb
 import nitools as nt
-from nilearn import plotting
+# from nilearn import plotting
 import SUITPy.flatmap as flatmap
 import surfAnalysisPy as sa
 
@@ -26,7 +26,7 @@ import selective_recruitment.region as sroi
 import Functional_Fusion.dataset as ds
 import Functional_Fusion.atlas_map as am
 
-import cortico_cereb_connectivity.scripts.script_plot_weights as wplot
+import cortico_cereb_connectivity.scripts.script_summarize_weights as wplot
 
 # making the scatterplot
 def annotate(dataframe, x = "X", y = "Y", labels = 'cond_num', text_size = 'small', text_weight = 'regular'):
@@ -63,25 +63,32 @@ def make_scatterplot(dataframe,
                      fit_line = True, 
                      labels=None,
                      colors=None,
-                     markers=None):
+                     markers='o'):
     """
     make scatterplot
     Args:
     dataframe (pd.DataFrame) -
             entire dataframe with individual subject data and fitted slopes and intercepts
     split (str) - column name indicating the different conditions to be plotted
-    labels(dict)    - column name to be used to determine shape of the marker
-    label (str)    - column name to be used to determine the label of the data points
-    height (int)   - int to determine the height of the plot
-    aspect (float) - floating number to determine the aspect ratio of the plot
+    fit_line (bool) - whether to fit a line to the data
+    labels (str) - column name indicating the labels to be used for the data points
     """
     # do the scatter plot
     grouped = dataframe.groupby([split])
     agg_kw = {split:'first',
-              x:np.mean,y: np.mean,
+              x:np.mean,
+              y: np.mean,
              'slope':np.mean,
              'intercept':np.mean}
+    if isinstance(labels,str):
+        agg_kw[labels] = 'first'
     df = grouped.agg(agg_kw)
+    if isinstance(labels,(list,np.ndarray)):
+        df['labels']=labels
+        labels = 'labels'
+    elif isinstance(labels,(pd.Series,dict)):
+        df['labels']=df[split].map(labels)
+        labels = 'labels'
 
     df["Y_CI"] = grouped.Y.apply(sps.sem) * 1.96
     df["X_CI"] = grouped.X.apply(sps.sem)*1.96
@@ -114,7 +121,7 @@ def make_scatterplot(dataframe,
     annotate(df, x = x, y = y,
             text_size = 'small',
             text_weight = 'regular',
-            labels = df[split].map(labels))
+            labels = df[labels])
     return ax
 
 def plot_mapwise_recruitment(data, 

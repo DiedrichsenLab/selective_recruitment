@@ -28,7 +28,7 @@ def get_parcel_names(parcellation = "NettekovenSym32", atlas_space = "SUIT3"):
 
     # get atlas_info
     atlas, atlas_info = am.get_atlas(atlas_dir = gl.atlas_dir, atlas_str = atlas_space)
-    
+
     # get the lookuptable for the parcellation
     lookuptable = nt.read_lut(gl.atlas_dir + f'/{atlas_info["dir"]}/atl-{parcellation}.lut')
 
@@ -37,18 +37,20 @@ def get_parcel_names(parcellation = "NettekovenSym32", atlas_space = "SUIT3"):
     if '0' not in label_info:
         # append a 0 to it
         label_info.insert(0, '0')
-    cmap = LinearSegmentedColormap.from_list("color_list", lookuptable[1])
     return label_info
 
-def get_parcel_single(parcellation = "NettekovenSym32", 
+
+
+
+def get_parcel_single(parcellation = "NettekovenSym32",
                        atlas_space = "SUIT3",
-                       roi_exp = "D.?R"):
+                       roi_exp = "D.R"):
     """returns a mask for the parcels that contain roi_exp
 
     Args:
         parcellation (str, optional): _description_. Defaults to "NettekovenSym32".
         atlas_space (str, optional): _description_. Defaults to "SUIT3".
-        roi_exp (str, optional): _description_. Defaults to "D.?R". other examples: "D.?1.", "D.?1.|D.?2.", "D.?1.R|D.?2.R
+        roi_exp (str, optional): _description_. Defaults to "D.R". other examples: "D1.", "D1.|D2.", "D1.R|D2.R"
 
     Returns:
         mask (boolean): list of True and Falses for where the roi_exp is found
@@ -56,26 +58,24 @@ def get_parcel_single(parcellation = "NettekovenSym32",
         selected_ (list): list of rois that contain roi_exp
     """
     # get_label_names
-    label_names = get_parcel_names(parcellation = parcellation, 
+    label_names = get_parcel_names(parcellation = parcellation,
                                   atlas_space = atlas_space)
-    
-    # use roi_exp to get the list of rois that contain roi_exp 
+
+    # use roi_exp to get the list of rois that contain roi_exp
     selected_ = re.findall(roi_exp, str(label_names))
-    
+
     # make a list of boolean values for the where we find the selected_ in label_names
     mask = np.isin(label_names, selected_)
-    
+
     # return the index number corresponding to Trues the mask
     idx = np.where(mask)[0]
-
-
     return mask, idx, selected_
 
 def get_region_summary(label = 'NettekovenSym32', roi_super = "D"):
     # get the roi numbers of Ds only
     idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
-    
-    
+
+
     D_indx = [label_names.index(name) for name in label_names if roi_super in name]
     D_name = [name for name in label_names if roi_super in name]
 
@@ -101,8 +101,8 @@ def get_region_summary(label = 'NettekovenSym32', roi_super = "D"):
 
     return Dinfo, D_indx, colors_D
 
-def divide_by_horiz(atlas_space = "SUIT3", 
-                    label = "NettekovenSym32", 
+def divide_by_horiz(atlas_space = "SUIT3",
+                    label = "NettekovenSym32",
                     ):
     """
     Create a mask that divides the cerebellum into anterior and posterior
@@ -120,11 +120,11 @@ def divide_by_horiz(atlas_space = "SUIT3",
 
     # load in the lobules parcellation
     lobule_file = f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom_space-SUIT_dseg.nii"
-    
+
     # get the lobules in the atlas space
     lobule_data, lobules = atlas_suit.get_parcel(lobule_file)
 
-    # load the lut file for the lobules 
+    # load the lut file for the lobules
     idx_lobule, _, lobule_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom.lut")
 
     # demarcate the horizontal fissure
@@ -143,7 +143,7 @@ def divide_by_horiz(atlas_space = "SUIT3",
 
     # get the label file
     lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii"
-    # load the lut file for the label  
+    # load the lut file for the label
     idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
 
     # get the parcels in the atlas space
@@ -152,7 +152,7 @@ def divide_by_horiz(atlas_space = "SUIT3",
     # loop over regions and divide them into two parts
     idx_new = [0]
     colors_new = [[0, 0, 0, 1]]
-    label_new = ["0"] 
+    label_new = ["0"]
     label_array = np.zeros(label_data.shape)
     idx_num = 1
     for i in labels:
@@ -171,7 +171,7 @@ def divide_by_horiz(atlas_space = "SUIT3",
             # get the anterior part
             label_new.append(f"{label_names[i]}_A")
             idx_new.append(idx_num)
-            colors_new.append(list(np.append(colors[i, :], 1))) 
+            colors_new.append(list(np.append(colors[i, :], 1)))
             label_array[np.argwhere(label_anterior)] = idx_num
             idx_num=idx_num+1
 
@@ -179,7 +179,7 @@ def divide_by_horiz(atlas_space = "SUIT3",
             # get the posterior part
             label_new.append(f"{label_names[i]}_P")
             idx_new.append(idx_num)
-            colors_new.append(list(np.append(colors[i, :], 1))) 
+            colors_new.append(list(np.append(colors[i, :], 1)))
             label_array[np.argwhere(label_posterior)] = idx_num
 
             idx_num=idx_num+1
@@ -202,7 +202,7 @@ def divide_quad(atlas_space = "SUIT3", label = "NettekovenSym32"):
         atlas_space (str, optional): _description_. Defaults to "SUIT3".
         label (str, optional): _description_. Defaults to "NettekovenSym32".
     """
-    
+
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++
     # First divide the cerebellum into anterior and posterior
     # create an instance of atlas object
@@ -210,11 +210,11 @@ def divide_quad(atlas_space = "SUIT3", label = "NettekovenSym32"):
 
     # load in the lobules parcellation
     lobule_file = f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom_space-SUIT_dseg.nii"
-    
+
     # get the lobules in the atlas space
     lobule_data, lobules = atlas_suit.get_parcel(lobule_file)
 
-    # load the lut file for the lobules 
+    # load the lut file for the lobules
     idx_lobule, _, lobule_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-Anatom.lut")
 
     # demarcate the horizontal fissure
@@ -231,16 +231,16 @@ def divide_quad(atlas_space = "SUIT3", label = "NettekovenSym32"):
     # assign value 2 to the posterior part
     posterior_mask = np.isin(lobule_data, posterior_idx)
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    
+
     # now integrate subparcels together
     # get the label file
     lable_file = f"{gl.atlas_dir}/tpl-SUIT/atl-{label}_space-SUIT_dseg.nii"
-    # load the lut file for the label  
+    # load the lut file for the label
     idx_label, colors, label_names = nt.read_lut(f"{gl.atlas_dir}/tpl-SUIT/atl-{label}.lut")
 
     # get the parcels in the atlas space
     label_data, labels = atlas_suit.get_parcel(lable_file)
-    
+
     l0_all = [f"{name[0]}{hemi}" for name in label_names[1:] for hemi in ['L', 'R']] # ignoring the first one which is 0
     label_names_new = list(OrderedDict.fromkeys(l0_all))
     ## get indices of old labels starting with new labels
@@ -248,7 +248,7 @@ def divide_quad(atlas_space = "SUIT3", label = "NettekovenSym32"):
     for letter in label_names_new:
         labels_idx.append([idx_label[i] for i, ltr in enumerate(label_names) if (ltr.startswith(letter[0])) & (ltr.endswith(letter[-1]))])
     fname = f"{label}integLRAP"
-    
+
     # label_names_new.insert(0, '0')
     # loop over these new labels and get the indices
     # re-number the parcels in label_data
@@ -260,10 +260,10 @@ def divide_quad(atlas_space = "SUIT3", label = "NettekovenSym32"):
     for lid, lname in enumerate(label_names_new):
         print(idx_new)
         print(f"{lid} {lname}")
-        
+
         # get a mask for the current label
         label_mask = np.isin(label_data, labels_idx[lid])
-        
+
         # get mask for anterior
         label_anterior = label_mask * anterior_mask
 
@@ -273,7 +273,7 @@ def divide_quad(atlas_space = "SUIT3", label = "NettekovenSym32"):
         # make up the label name
         names.append(f"{lname}_A")
         idx_new.append(ii)
-        
+
         # get mask for posterior
         label_posterior = label_mask * posterior_mask
         # use the mask to set new labels
@@ -281,8 +281,8 @@ def divide_quad(atlas_space = "SUIT3", label = "NettekovenSym32"):
         label_data_new[label_posterior] = ii
         names.append(f"{lname}_P")
         idx_new.append(ii)
-        
-        
+
+
     # create a nifti object
     nii = atlas_suit.data_to_nifti(label_data_new)
 

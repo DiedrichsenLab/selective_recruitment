@@ -335,6 +335,7 @@ def get_summary_conn(dataset = "MDTB",
     obs_df = average_rois(Y, info=info,
                               atlas_space = atlas_space,
                               atlas_roi = cerebellum_roi,
+                              roi_selected=cerebellum_roi_selected,
                               unite_struct = False,
                               var = "Y")
 
@@ -342,6 +343,7 @@ def get_summary_conn(dataset = "MDTB",
     pred_df = average_rois(Yhat, info=info,
                               atlas_space = atlas_space,
                               atlas_roi = cerebellum_roi,
+                              roi_selected=cerebellum_roi_selected,
                               unite_struct = False,
                               var = "X")
 
@@ -349,42 +351,3 @@ def get_summary_conn(dataset = "MDTB",
     summary_df = pd.merge(left=obs_df, right=pred_df, how='inner')
     return summary_df
 
-if __name__ == "__main__":
-    # create an instance of the dataset class
-    # D = get_summary_roi(dataset = "MDTB",
-    #              ses_id = 'ses-s1',
-    #              type = "CondAll",
-    #              subj=['sub-02'],
-    #              cerebellum_roi = None, # "NettekovenSym32",
-    #              cerebellum_roi_selected= ['D1L','D2L'],
-    #              cortex_roi = None, # "Icosahedron1002",
-    #              cortex_roi_selected=[2,3],
-    #              add_rest = True)
-    # pass
-    # pass
-    df = get_summary_conn(dataset = "WMFS",
-                     ses_id = 'ses-02',
-                     type = "CondAll",
-                     subj = [1,2],
-                     atlas_space = "SUIT3",
-                     cerebellum_roi = "NettekovenSym32",
-                     cortex_roi = "Icosahedron1002",
-                     add_rest = True,
-                     mname_base = "MDTB_all_Icosahedron1002_L2Regression",
-                     mname_ext = "_A8",
-                     crossed = True)
-    pass
-    pass
-    # test case
-    # D = get_summary_conn(dataset = "WMFS",
-    #                  ses_id = 'ses-02',
-    #                  subj = None,
-    #                  atlas_space = "SUIT3",
-    #                  cerebellum_roi = "NettekovenSym68c32",
-    #                  cortex_roi = "Icosahedron1002",
-    #                  type = "CondHalf",
-    #                  add_rest = True,
-    #                  mname_base = "MDTB_ses-s1",
-    #                  mmethod = "L2Regression_A8",
-    #                  crossed = True)
-    pass

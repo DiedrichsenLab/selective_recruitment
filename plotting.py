@@ -26,7 +26,7 @@ import selective_recruitment.region as sroi
 import Functional_Fusion.dataset as ds
 import Functional_Fusion.atlas_map as am
 
-import cortico_cereb_connectivity.scripts.script_plot_weights as wplot
+import cortico_cereb_connectivity.scripts.script_summarize_weights as wplot
 
 # making the scatterplot
 def annotate(dataframe, x = "X", y = "Y", labels = 'cond_num', text_size = 'small', text_weight = 'regular'):

@@ -351,3 +351,17 @@ def get_summary_conn(dataset = "MDTB",
     summary_df = pd.merge(left=obs_df, right=pred_df, how='inner')
     return summary_df
 
+
+
+if __name__ == "__main__":
+    get_voxdata_obs_pred(dataset = "WMFS",
+                         ses_id = 'ses-02',
+                         subj = None,
+                         atlas_space='SUIT3',
+                         cortex = 'Icosahedron1002',
+                         type = "CondAll",
+                         add_rest = False,
+                         mname_base = "MDTB_all_Icosahedron1002_L2Regression",
+                         mname_ext = "_A8",
+                         train_type = "train",
+                         crossed = True)

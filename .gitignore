@@ -133,12 +133,5 @@ dmypy.json
 .vscode/extensions.json
 .vscode/launch.json
 .vscode/launch.json
-<<<<<<< Updated upstream
-=======
-globals.py
-selective_recruitment.code-workspace
->>>>>>> Stashed changes
-notebooks/working_memory_avg_activation_enc_L.pdf
 *.pdf
-*.pdf
-ridge_reg.py
+*.npy

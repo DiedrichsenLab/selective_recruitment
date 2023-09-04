@@ -54,7 +54,7 @@ def annotate(dataframe, x = "X", y = "Y", labels = 'cond_num', text_size = 'smal
                         )
         texts.append(text)
 
-    adjust_text(texts) # make sure you have installed adjust_text
+   # adjust_text(texts) # make sure you have installed adjust_text
 
 def make_scatterplot(dataframe, 
                      x = "X", 

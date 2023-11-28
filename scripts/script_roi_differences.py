@@ -16,19 +16,6 @@ from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 
 from pathlib import Path
-from SUITPy import flatmap
-import PcmPy as pcm
-
-import pingouin as pg
-
-
-import selective_recruitment.plotting as plotting
-import selective_recruitment.regress as ra
-import selective_recruitment.globals as gl
-import selective_recruitment.data as ss
-
-import Functional_Fusion.dataset as fdata
-import Functional_Fusion.atlas_map as am
 
 from statsmodels.stats.anova import AnovaRM  # perform F test
 # import warnings
@@ -136,7 +123,7 @@ def prep_roi_comparison(dd):
 
 def plot_roi_differences(D, cond_map, depvar = "Y_norm", var = ["cond_name", "roi_name"]):
     # print anova results
-    
+
 
     # Make sn column into an integer
     D = norm_within_category(D, category=['roi_name','sn'], value=depvar[0], norm='mean')
@@ -170,10 +157,10 @@ if __name__ == "__main__":
     D = D.loc[D.cond_name != "rest"]
     D["AP"] = D["roi_name"].str[4]
     # D = plot_roi_differences(D,cond_map)
-    print(AnovaRM(data=D[(D.cond_name != 'rest')], 
+    print(AnovaRM(data=D[(D.cond_name != 'rest')],
                   depvar='Y_norm',
-                  subject='sn', 
-                  within=['phase'], 
+                  subject='sn',
+                  within=['phase'],
                   aggregate_func=np.mean).fit())
     # anov = AnovaRM(data=D, depvar='Y_norm',
     #               subject='sn',

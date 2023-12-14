@@ -178,6 +178,7 @@ def average_rois(tensor,
                 atlas_roi = "NettekovenSym32",
                 roi_selected = None,
                 unite_struct = False,
+                space = "SUIT", 
                 var = "Y"):
     """ Makes a summary dataframe for data averaged over voxels in a parcel
     Values will be stored in a column named var
@@ -210,7 +211,7 @@ def average_rois(tensor,
                 labels.append(gl.atlas_dir + f'/{ainfo["dir"]}/{atlas_roi}.{hemi}.label.gii')
             label_vec, _ = atlas.get_parcel(labels, unite_struct = unite_struct)
         else:
-            labels = gl.atlas_dir + f'/{ainfo["dir"]}/atl-{atlas_roi}_space-SUIT_dseg.nii'
+            labels = gl.atlas_dir + f'/{ainfo["dir"]}/atl-{atlas_roi}_space-{space}_dseg.nii'
             label_vec, _ = atlas.get_parcel(labels)
 
         # use lookuptable to get the names of the regions if lut file exists
@@ -253,7 +254,8 @@ def average_rois(tensor,
 def get_summary_roi(dataset = "WMFS",
                      ses_id = 'ses-02',
                      subj = None,
-                     atlas_space = "SUIT3",
+                     atlas = "SUIT3",
+                     space = "SUIT", 
                      cerebellum_roi = "NettekovenSym32",
                      cerebellum_roi_selected = None,
                      cortex_roi = "Icosahedron1002",
@@ -272,7 +274,7 @@ def get_summary_roi(dataset = "WMFS",
     Y, X, atlas, info = get_voxdata_obs_pred(dataset = dataset,
                                             ses_id = ses_id,
                                             subj = subj,
-                                            atlas_space=atlas_space,
+                                            atlas_space=atlas,
                                             type = type,
                                             cortex = None,
                                             mname_base = None,
@@ -281,9 +283,10 @@ def get_summary_roi(dataset = "WMFS",
 
     # get the observed data averaged over region
     obs_df = average_rois(Y, info=info,
-                              atlas_space = atlas_space,
+                              atlas_space = atlas,
                               atlas_roi = cerebellum_roi,
                               roi_selected=cerebellum_roi_selected,
+                              space = space, 
                               unite_struct = False,
                               var = "Y")
 
@@ -291,6 +294,7 @@ def get_summary_roi(dataset = "WMFS",
     pred_df = average_rois(X, info=info,
                               atlas_space = 'fs32k',
                               atlas_roi = cortex_roi,
+                              space = 'fs32k', 
                               roi_selected=cortex_roi_selected,
                               unite_struct = False,
                               var = "X")
@@ -305,6 +309,7 @@ def get_summary_conn(dataset = "MDTB",
                      ses_id = 'ses-01',
                      subj = None,
                      atlas_space = "SUIT3",
+                     space = "SUIT",
                      cerebellum_roi = "NettekovenSym32",
                      cerebellum_roi_selected = None,
                      cortex_roi = "Icosahedron1002",
@@ -335,6 +340,7 @@ def get_summary_conn(dataset = "MDTB",
     obs_df = average_rois(Y, info=info,
                               atlas_space = atlas_space,
                               atlas_roi = cerebellum_roi,
+                              space = space, 
                               roi_selected=cerebellum_roi_selected,
                               unite_struct = False,
                               var = "Y")
@@ -343,6 +349,7 @@ def get_summary_conn(dataset = "MDTB",
     pred_df = average_rois(Yhat, info=info,
                               atlas_space = atlas_space,
                               atlas_roi = cerebellum_roi,
+                              space = space, 
                               roi_selected=cerebellum_roi_selected,
                               unite_struct = False,
                               var = "X")
@@ -354,14 +361,19 @@ def get_summary_conn(dataset = "MDTB",
 
 
 if __name__ == "__main__":
-    get_voxdata_obs_pred(dataset = "WMFS",
-                         ses_id = 'ses-02',
-                         subj = None,
-                         atlas_space='SUIT3',
-                         cortex = 'Icosahedron1002',
-                         type = "CondAll",
-                         add_rest = False,
-                         mname_base = "MDTB_all_Icosahedron1002_L2Regression",
-                         mname_ext = "_A8",
-                         train_type = "train",
-                         crossed = True)
+    atlas_space = 'MNIAsymBg2'
+    space = 'MNI152NLin6Asym'
+    cerebellum_roi = "HarvardOxBg"
+    get_summary_conn(dataset = "WMFS",
+                     ses_id = 'ses-01',
+                     subj = None,
+                     atlas_space = atlas_space,
+                     space = space,
+                     cerebellum_roi = cerebellum_roi,
+                     cerebellum_roi_selected = None,
+                     cortex_roi = "Icosahedron1002",
+                     type = "CondHalf",
+                     add_rest = True,
+                     mname_base = 'MDTB_ses-s1_Icosahedron1002_L2regression',
+                     mname_ext = '_A6',
+                     crossed = True)

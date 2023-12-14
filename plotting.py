@@ -47,7 +47,7 @@ def annotate(dataframe, x = "X", y = "Y", labels = 'cond_num', text_size = 'smal
         labels = dataframe[labels]
     for i,d in dataframe.iterrows():
         text = plt.text(
-                        d[x]+0.001,
+                        d[x]+0.0001,
                         d[y],
                         s = labels.loc[i],
                         horizontalalignment='left',
@@ -194,6 +194,7 @@ def get_weight_map(method = "L2Regression",
                     cortex_roi = "Icosahedron1002", 
                     cerebellum_roi = "NettekovenSym68c32",
                     cerebellum_atlas = "SUIT3", 
+                    space = "SUIT",
                     extension = '09', 
                     dataset_name = "Fusion", 
                     ses_id = "all", 
@@ -242,7 +243,7 @@ def get_weight_map(method = "L2Regression",
     atlas_suit, _ = am.get_atlas(cerebellum_atlas, gl.atlas_dir)
 
     # load the label file for the cerebellum
-    label_suit = gl.atlas_dir + f"/tpl-SUIT/atl-{cerebellum_roi}_space-SUIT_dseg.nii"
+    label_suit = gl.atlas_dir + f"/tpl-{space}/atl-{cerebellum_roi}_space-{space}_dseg.nii"
 
     # getting parcels for the cerebellum
     atlas_suit.get_parcel(label_suit)
@@ -252,7 +253,7 @@ def get_weight_map(method = "L2Regression",
 
     # preping the parcel axis
     ## load the lookup table for the cerebellar parcellation to get the names of the parcels
-    index,colors,labels = nt.read_lut(gl.atlas_dir + f"/tpl-SUIT/atl-{cerebellum_roi}.lut")
+    index,colors,labels = nt.read_lut(gl.atlas_dir + f"/tpl-{space}/atl-{cerebellum_roi}.lut")
 
     # make cifti
     if type == "pscalar":

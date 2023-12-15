@@ -147,6 +147,7 @@ def plot_mapwise_recruitment(data,
 
 def plot_parcels(parcellation = "NettekovenSym32",
                  atlas_space = "SUIT3", 
+                 space = 'SUIT', 
                  roi_exp = "D.?R", 
                  split = None, 
                  stats = "mode", 
@@ -167,11 +168,15 @@ def plot_parcels(parcellation = "NettekovenSym32",
     
     print(selected_)
         
-    # load the label file
-    fname = gl.atlas_dir + f'/{ainfo["dir"]}/atl-{parcellation}_space-SUIT_dseg.nii'
-    img = nb.load(fname)   
-    # use get parcel to get list of labels 
-    label_vec, labels = atlas.get_parcel(fname)
+    # load the probabilistic atlas
+    fname = gl.atlas_dir + f'/{ainfo["dir"]}/atl-{parcellation}_space-{space}_probseg.nii'
+    pseg = nb.load(fname)  
+
+    # convert to flatmap
+    surf_data = flatmap.vol_to_surf(pseg, stats='nanmean', space='SUIT')
+
+    # get the max prob assignment on the flatmap
+    label_vec = np.argmax(surf_data, axis=1) + 1
     
     # make a nifti image for the selected regions
     dat_new = np.zeros_like(label_vec, dtype = float)
@@ -181,12 +186,9 @@ def plot_parcels(parcellation = "NettekovenSym32",
         for i, r in enumerate(idx):
             dat_new[np.isin(label_vec, r)] = split[i]
 
-    
-    img = atlas.data_to_nifti(dat_new)
-    
-    # map it from volume to surface
-    img_flat = flatmap.vol_to_surf([img], stats=stats, space = 'SUIT', ignore_zeros=True)
-    ax = flatmap.plot(img_flat, render=render, bordersize = 1.5, 
+    # plot the flatmap
+    ax = flatmap.plot(dat_new, render=render, bordersize = 1.5, 
+                      label_names = selected_, 
                       overlay_type='label', cmap = cmap)
     return ax
 

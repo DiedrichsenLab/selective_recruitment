@@ -10,10 +10,9 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": false,
-            "env": {
-                "PYTHONPATH": "C:\\Users\\lshah\\OneDrive\\Documents\\Projects\\"
-            }
+            "justMyCode": false, 
+            // "cwd": "${workspaceRoot}",
+            // "env":{"PYTHONPATH": "${workspaceFolderRoot}"}
         }
     ]
 }

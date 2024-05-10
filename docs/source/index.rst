@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Selective Recruitment's documentation!
+Selective Recruitment's documentation
 =================================================
 **Selective Recruitment** is a Python package containing code used to implement the analysis introduced in *Shahshahani et al., 2023*
 
@@ -16,12 +16,12 @@ Selective Recruitment's documentation!
 
 
 
-Indices and tables
-==================
+.. Indices and tables
+.. ==================
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+.. * :ref:`genindex`
+.. * :ref:`modindex`
+.. * :ref:`search`
 
 Contents
 --------

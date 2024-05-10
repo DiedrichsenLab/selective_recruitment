@@ -9,7 +9,8 @@ Cortical surface data is extracted in fsLR space with 32k vertices, and cerebell
 Using the Functional Fusion toolbox, first create an instance of the WMFS dataset: (see Functional_Fusion documentation for more details on how to create an class for your dataset)
 
 .. code-block:: python
-
+    
+    import Functional_Fusion.datasets as ds
     dataset = ds.DataSetWMFS(base_dir + '/WMFS')
 
 Now to extract cortical data in fs32k space:
